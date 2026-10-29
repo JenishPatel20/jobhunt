@@ -1,0 +1,35 @@
+# Answers refer to local profile facts. Set every fact truthfully before use.
+answers:
+  - name: sponsorship
+    patterns: ['sponsor|employment visa']
+    ref: work_authorization.needs_h1b_sponsorship
+  - name: work_authorization
+    patterns: ['legally authorized|authorized to work']
+    ref: work_authorization.authorized_to_work_us_now
+  - name: start_date
+    patterns: ['start date|when can you start|available to start']
+    ref: work_authorization.earliest_start_date
+  - name: salary
+    patterns: ['salary|compensation']
+    ref: preferences.salary_answer_text
+  - name: relocation
+    patterns: ['relocat']
+    ref: preferences.willing_to_relocate
+  - name: email
+    patterns: ['email']
+    ref: candidate.email
+  - name: phone
+    patterns: ['phone|mobile']
+    ref: candidate.phone
+  - name: linkedin
+    patterns: ['linkedin']
+    ref: candidate.links.linkedin
+  - name: github
+    patterns: ['github']
+    ref: candidate.links.github
+  - name: portfolio
+    patterns: ['portfolio|personal website']
+    ref: candidate.links.portfolio
+always_human_patterns:
+  - 'certify|attest|agree|consent|acknowledge|signature'
+  - 'veteran|disabilit|gender|race|ethnic|hispanic|pronoun'

@@ -1,0 +1,27 @@
+# Target titles (regex, case-insensitive)
+include:
+  - 'software\s+(engineer|developer)'
+  - 'back-?end'
+  - '\bai\s+engineer'
+  - 'applied\s+ai'
+  - 'machine\s+learning'
+  - '\bml\b'
+  - 'data\s+(engineer|scientist)'
+  - 'product\s+engineer'
+  - 'member\s+of\s+technical\s+staff'
+  - 'forward[\s-]+deployed'
+# Too generic alone: must ALSO contain a technical term in the title
+qualified_titles:
+  - 'associate'
+# Early-career labels: technical term in title OR in first 500 chars of description
+early_career_labels:
+  - 'university\s+graduate'
+  - 'new\s+grad'
+  - 'early\s+career'
+  - '\bgraduate\b'
+technical_terms: ['engineer', 'developer', 'software', 'data', 'machine learning', '\bml\b', '\bai\b', 'backend', 'back-end', 'platform', 'technical']
+# Conditional titles: pass the title gate ONLY if the JD mentions at least N distinct skills from your profile
+# (Python, SQL, pandas, PostgreSQL, ...). They still go through the Gemini fit score (needs 7+ to be applied to).
+conditional_titles:
+  - 'data\s+analyst'
+conditional_min_skill_overlap: 3

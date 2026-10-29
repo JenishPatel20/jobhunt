@@ -1,0 +1,45 @@
+# Hard rules (Module 3, stage 1). Regexes are case-insensitive. Edit freely.
+# "Authorized to work in the US" alone is NOT a dealbreaker (OPT qualifies).
+
+no_sponsorship_patterns:
+  - '(will|does|do|can|could|would)\s+not\s+(provide|offer|sponsor|support)[^.]{0,80}(sponsor|visa|h-?1b)'
+  - '(unable|not able|cannot|can.?t|can not)\s+to\s+(provide\s+)?(sponsor|offer\s+(visa\s+)?sponsorship|provide\s+(visa|immigration))'
+  - '(unable|not able|cannot|can.?t|can not)\s+(sponsor|offer\s+(visa\s+)?sponsorship)'
+  - 'without\s+(the\s+need\s+for\s+)?(visa\s+|employer\s+)?sponsorship'
+  - 'without\s+requiring\s+(visa\s+|employer\s+)?sponsorship'
+  - '(not|n.t)\s+(currently\s+)?(sponsor|sponsoring)\b'
+  - 'no\s+(visa\s+|h-?1b\s+)?sponsorship'
+  - '(sponsorship|visa)[^.]{0,30}(is\s+)?not\s+(available|provided|offered|supported)'
+  - 'not\s+(eligible|available)[^.]{0,40}sponsorship'
+  - '(must|should)\s+not\s+(now\s+or\s+in\s+the\s+future\s+)?require\s+(visa\s+)?sponsorship'
+  - 'will\s+not\s+(now\s+or\s+in\s+the\s+future\s+)?require\s+(visa\s+)?sponsorship'
+  - 'not\s+require\s+(visa\s+|employer\s+)?sponsorship'
+
+citizenship_clearance_patterns:
+  - 'u\.?s\.?\s+citizens?\s+(only|required)'
+  - 'must\s+be\s+(a\s+)?(u\.?s\.?|united\s+states)\s+citizen'
+  - '(u\.?s\.?|united\s+states)\s+citizenship\s+(is\s+)?required'
+  - '(active\s+)?(top\s+secret|ts/sci|secret)\s+(security\s+)?clearance'
+  - 'security\s+clearance'
+  - 'public\s+trust'
+  - 'itar'
+  - 'u\.?s\.?\s+persons?\b'
+
+sponsorship_positive_patterns:   # small boost
+  - '(visa\s+)?sponsorship\s+(is\s+)?(available|provided|offered|supported)'
+  - 'we\s+(will\s+)?(do\s+)?sponsor\s+(visas?|h-?1b)'
+  - 'h-?1b\s+(visa\s+)?(sponsorship\s+)?(available|supported|friendly)'
+
+# Title rules
+senior_title_patterns:
+  - '\b(senior|sr\.?|(?<!technical )staff|principal|lead|manager|director|head\s+of|vp|vice\s+president|architect|distinguished|fellow)\b'
+  - '\b(engineer|developer|scientist|analyst)\s*(ii|iii|iv|v|2|3|4|5)\b'
+title_exclude_patterns:
+  - '\b(sales|recruit|marketing|nurse|attorney|paralegal|accountant|account\s+executive|customer\s+success|technician|mechanical|electrical|civil|chemical|manufacturing|hardware|firmware|mechanic)\b'
+  - '\bintern(ship)?\b'            # full-time roles only; remove if you want internships
+
+# Experience filter: reject if a REQUIRED (not "preferred") requirement exceeds this
+max_required_years: 3
+
+# Location: US only. Locations with no country signal (e.g. just "Remote"):
+unknown_location: keep            # keep | drop

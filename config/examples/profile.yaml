@@ -1,0 +1,68 @@
+# Fictional sample only. Replace every candidate fact before applying.
+candidate:
+  name: Alex Example
+  location: New York, NY
+  phone: '+1-202-555-0100'
+  email: alex@example.com
+  links:
+    linkedin: https://www.linkedin.com/in/example-candidate
+    github: https://github.com/example-candidate
+    portfolio: https://example.com
+work_authorization:
+  needs_h1b_sponsorship: true
+  planned_path: null
+  current_status: null
+  authorized_to_work_us_now: null
+  opt_start_date: null
+  earliest_start_date: null
+preferences:
+  target_base_usd: 95000
+  salary_min_usd: 90000
+  salary_max_usd: 100000
+  salary_answer_text: My annual base salary expectation is USD 90,000 to 100,000, depending on the role.
+  willing_to_relocate: true
+  github_username: ''
+education:
+  - id: example-degree
+    school: Example University
+    degree: BS in Computer Science
+    date: '2025'
+    location: New York, NY
+    details: []
+skills:
+  Languages: [Python, SQL, JavaScript]
+  Backend/Web: [FastAPI, PostgreSQL, HTML, CSS]
+  Data/Infrastructure: [pandas, BeautifulSoup, Git]
+  AI/ML: [scikit-learn, XGBoost]
+experience:
+  - id: example-api
+    company: Example Services
+    title: Software Engineering Intern
+    dates: May 2024 - August 2024
+    bullets:
+      - id: api-1
+        text: Built a FastAPI/PostgreSQL service with 12 REST endpoints.
+      - id: api-2
+        text: Built a Python scraping and enrichment pipeline using BeautifulSoup and S3.
+  - id: example-ops
+    company: Example Campus Lab
+    title: Student Developer
+    dates: September 2023 - April 2024
+    bullets:
+      - id: ops-1
+        text: Wrote Python scripts to validate CSV records before database imports.
+  - id: example-web
+    company: Example Community Group
+    title: Volunteer Developer
+    dates: January 2023 - April 2023
+    bullets:
+      - id: web-1
+        text: Created an HTML and CSS website for a community event.
+projects:
+  - id: example-ml
+    name: Sample Classification Study
+    subtitle: Python, scikit-learn, XGBoost
+    repo_url: https://example.com/sample-classification
+    bullets:
+      - id: ml-1
+        text: Compared 3 classifiers using scikit-learn and XGBoost on a synthetic dataset.

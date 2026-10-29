@@ -1,0 +1,4 @@
+# Add reviewed boards, for example:
+# - {name: Example Company, ats: greenhouse, slug: example-company}
+# Workday slug format: tenant|wdN|site. Confirm each board before enabling it.
+companies: []

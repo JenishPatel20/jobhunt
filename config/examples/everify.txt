@@ -1,0 +1,1 @@
+# Optional: one independently verified company name per line.

@@ -1,0 +1,3 @@
+# Empty queries keep optional scraping idle until configured.
+queries: []
+location: United States
