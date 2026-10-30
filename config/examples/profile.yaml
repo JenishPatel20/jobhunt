@@ -1,6 +1,9 @@
 # Fictional sample only. Replace every candidate fact before applying.
+example_profile: true  # Set false only after replacing and reviewing all fictional facts.
 candidate:
   name: Alex Example
+  first_name: Alex
+  last_name: Example
   location: New York, NY
   phone: '+1-202-555-0100'
   email: alex@example.com
@@ -15,7 +18,12 @@ work_authorization:
   authorized_to_work_us_now: null
   opt_start_date: null
   earliest_start_date: null
+  answers_confirmed_on: null  # YYYY-MM-DD, provided by you; no inferred authorization
+  answers_valid_until: null   # YYYY-MM-DD, review again after this date
 preferences:
+  target_roles: [Software Engineer, Backend Engineer, Applied AI Engineer, Data Engineer]
+  employment_types: [full-time, internship]
+  locations: [United States, remote, hybrid, onsite]
   target_base_usd: 95000
   salary_min_usd: 90000
   salary_max_usd: 100000

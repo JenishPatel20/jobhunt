@@ -33,10 +33,9 @@ sponsorship_positive_patterns:   # small boost
 # Title rules
 senior_title_patterns:
   - '\b(senior|sr\.?|(?<!technical )staff|principal|lead|manager|director|head\s+of|vp|vice\s+president|architect|distinguished|fellow)\b'
-  - '\b(engineer|developer|scientist|analyst)\s*(ii|iii|iv|v|2|3|4|5)\b'
+  - '\b(engineer|developer|scientist|analyst)\s*(iii|iv|v|3|4|5)\b'
 title_exclude_patterns:
   - '\b(sales|recruit|marketing|nurse|attorney|paralegal|accountant|account\s+executive|customer\s+success|technician|mechanical|electrical|civil|chemical|manufacturing|hardware|firmware|mechanic)\b'
-  - '\bintern(ship)?\b'            # full-time roles only; remove if you want internships
 
 # Experience filter: reject if a REQUIRED (not "preferred") requirement exceeds this
 max_required_years: 3

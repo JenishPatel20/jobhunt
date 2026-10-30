@@ -1,38 +1,37 @@
-# Example tunables. Confirm model availability and quotas for your account before use.
+# Local operation; no paid provider fallback or automatic top-up is enabled.
 llm:
-  models: ["gemini-3.8-flash", "gemini-3.6-flash"] # snapshot configuration; verify provider availability
-  rpm: 8                        # (default) requests/min, stay under free-tier limit
-  daily_cap: 150                # (default) hard stop per day; check your free-tier quota
-  connect_timeout_sec: 5
-  read_timeout_sec: 45
-  attempts_per_model: 2
+  provider: codex_subscription
+  daily_cap: 100
+  timeout_sec: 180
   cooldown_minutes: 30
 filter:
-  apply_threshold: 7            # fit threshold
-  thin_apply_threshold: 9       # tentative score required when description is missing/short
+  daily_score_limit: 30  # Leave model-call capacity for document preparation.
+  apply_threshold: 7
+  thin_apply_threshold: 9
   thin_description_chars: 100
-  gap_log_min: 5                # near-match jobs are logged for learning
-  boost_mode: add               # (default) add | priority (priority = only affects queue order)
-  sponsor_boost: {strong: 1.0, some: 0.5, weak: 0.25}   # (default) by certified tech LCA count
-  sponsor_tiers: {strong: 50, some: 10, weak: 1}          # (default) min tech LCAs per tier
-  everify_boost: 0.5            # (default)
-  jd_positive_boost: 0.5        # (default) JD says sponsorship available
-  max_age_days: 30              # (default) ignore postings older than this
+  gap_log_min: 5
+  # Historical/role sponsorship evidence orders equal-fit jobs; never raises fit.
+  boost_mode: priority
+  sponsor_boost: {strong: 1.0, some: 0.5, weak: 0.25}
+  sponsor_tiers: {strong: 50, some: 10, weak: 1}
+  jd_positive_boost: 2.0
+  max_age_days: 30
 discover:
   boards: [greenhouse, lever, ashby, workday]
-  scraper_sites: [indeed, glassdoor, zip_recruiter, google]   # linkedin deliberately excluded
+  scraper_sites: [indeed, glassdoor, zip_recruiter]
   results_per_query: 40
   hours_old: 168
 tailor:
-  include_summary: false        # (default) resumes currently have no summary
+  include_summary: false
   max_projects: 5
   cover_letter_max_words: 250
 apply:
-  backend: gemini_cli           # gemini_cli | applypilot | fake
-  dry_runs_required: 20         # dry runs required before explicit live enablement
-  max_applies_per_day: 15       # (default) safety cap
-  timeout_sec: 900
-  applypilot_cmd: ["applypilot", "apply", "--url", "{url}"]   # unverified; depends on which fork you pick
-  applypilot_dry_flag: "--dry-run"
+  backend: playwright
+  dry_runs_required: 20
+  max_applies_per_day: 10
+  reviewed_trials_required: 3
+  browser_timeout_ms: 20000
+tracking:
+  gmail_enabled: false
 learn:
-  weekly_learning_hours: 4      # weekly time budget
+  weekly_learning_hours: 4

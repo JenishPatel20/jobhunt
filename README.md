@@ -2,134 +2,169 @@
 
 [![Offline tests](https://github.com/JenishPatel20/jobhunt/actions/workflows/tests.yml/badge.svg)](https://github.com/JenishPatel20/jobhunt/actions/workflows/tests.yml)
 
-A local Python pipeline for discovering jobs, ranking matches, tailoring application documents,
-and tracking applications in SQLite. Built by **Jenish Patel**.
+A local Python workflow for discovering jobs, verifying availability, evaluating fit,
+preparing application documents, applying with human oversight, and tracking outcomes.
+Built by **Jenish Patel**.
 
-Job searching involves repeated work across job boards, resumes, forms, and email. Jobhunt
-keeps that work in one queue, with explicit dry-run gates and a human inbox for questions
-that need judgment.
+SQLite holds the private ledger. The workflow runs on your Mac while awake and keeps
+its progress through sleep/restarts. There are no hosting or paid automation dependencies.
+Model work uses supported ChatGPT subscription authentication, subject to your account's
+limits. It pauses on unavailable access; API billing and paid fallbacks are disabled.
 
-```text
-Profile → Discover → Filter → Tailor → Apply → Track → Learn
-                      ↓                ↓       ↓
-                 SQLite queue ← human inbox → digest
+```mermaid
+flowchart LR
+    Find[ATS feeds + public board leads] --> Save[Save every observation]
+    Save --> Fit[Eligibility + evidenced fit]
+    Fit --> Verify[Verify employer posting]
+    Verify --> Docs[Validated resume / required letter]
+    Docs --> Form[Prepare known ATS form]
+    Form --> Gate[Approval + fresh availability]
+    Gate --> Submit[Submit and capture receipt]
+    Submit --> Track[Ledger + outcomes]
+    Form --> Human[Telegram / local inbox]
+    Human --> Form
 ```
 
-## What it does
+## What works and what needs review
 
-- Reads public Greenhouse, Lever, Ashby, and Workday job feeds; optional JobSpy adapters broaden discovery.
-- Filters by role, location, experience requirements, and sponsorship signals before Gemini fit scoring.
-- Uses historical sponsor records from user-imported disclosure files as ranking signals.
-- Selects and rewrites resume bullets using source IDs, numeric checks, and a known-technology vocabulary.
-- Produces HTML resumes, optional PDFs, and checked cover letters.
-- Routes application questions, attestations, and browser obstacles to a local human inbox.
-- Classifies optional Gmail metadata and snippets into application events, and reports skill gaps.
+- Greenhouse, Lever, Ashby, and Workday discovery adapters; optional public-board discovery via JobSpy.
+- Every returned observation is recorded before exclusion, including stale or malformed listings.
+- Stable source/requisition identities, separate source links, description snapshots, and possible-duplicate review.
+- Open/closed/uncertain checks against Greenhouse, Lever, and Ashby employer endpoints.
+- Eligibility evidence stays separate from technical fit. Sponsorship silence remains unknown;
+  historical employer sponsorship prioritizes matches without raising a weak fit score.
+- Full-time and internship roles share the fit queue. Compensation metadata keeps its original units.
+- Versioned resumes and required cover letters, source ownership checks, PDF text checks,
+  and horizontal-overflow detection. Upload is blocked if required documents fail validation.
+- A deterministic **Greenhouse classic form** adapter, with explicit approval and receipt evidence.
+  Other form layouts pause for manual handling; this does not claim universal ATS automation.
+- Durable Telegram alerts/replies, scoped answers, human browser takeover, and submission reconciliation.
+- Complete local CSV/JSON exports and optional read-only Gmail outcome tracking.
 
-**Stack:** Python 3.11+, SQLite, PyYAML, Requests, Gemini REST, optional Playwright, ntfy,
-and read-only Gmail integration. See [architecture](docs/architecture.md) for data flow and boundaries.
+Workday discovery currently fetches a bounded page and cannot establish closure. Public-board
+adapters can be blocked or unavailable. Unsupported employer links require human verification
+or a supported employer URL. Live ATS compatibility, subscription access, and notification
+credentials still require your own reviewed setup; local fixture tests do not establish them.
 
 ## Setup
 
-Use macOS or Linux; the CLI currently imports Unix `fcntl`. Scheduling commands use macOS launchd.
+Python 3.11+ on macOS/Linux is required. Scheduling uses macOS launchd.
 
 ```bash
-git clone https://github.com/JenishPatel20/jobhunt.git
-cd jobhunt
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -e '.[dev]'
-cp .env.example .env
-cp config/examples/* config/
-jobhunt preflight
+python -m pip install -e '.[dev,pdf]'
+playwright install chromium
+jobhunt init
 ```
 
-The examples describe a **fictional candidate**. Replace all candidate facts and application answers in
-`config/profile.yaml` and `config/answer_bank.yaml` before applying. Review the role filters and add
-reviewed ATS boards to `config/companies.yaml`; optional scraping queries start empty.
+`init` creates missing local configuration and `.env` files, preserving existing files.
+Examples describe a **fictional candidate**. Replace all candidate facts and answers in
+`config/profile.yaml` and `config/answer_bank.yaml`. Set `example_profile: false` only after
+replacing the fictional content. Add reviewed employer boards to `config/companies.yaml`.
 
-Set `GEMINI_API_KEY` in `.env` for scoring and tailoring. Review `llm.models` and quota settings in
-`config/settings.yaml`: the snapshot's model names and free-tier assumptions have not been verified
-against your account. `jobhunt llm-doctor` makes a small connectivity check without sending profile data.
+Provide your own confirmed work-authorization/start-date answers and their review window
+(`answers_confirmed_on`, `answers_valid_until`). Missing or expired answers pause required
+form questions. The workflow never derives work authorization from a student status or graduation date.
 
-Optional browser/PDF and scraper dependencies:
+Install Codex CLI and sign in with your existing ChatGPT subscription:
 
 ```bash
-python -m pip install -e '.[pdf,scrape]'
-playwright install chromium
-npm install -g @google/gemini-cli
+npm install -g @openai/codex
+codex login
+jobhunt preflight
+jobhunt llm-doctor
+jobhunt profile-confirm
 ```
 
-The browser application backend requires Gemini CLI, Node.js, and its Playwright MCP tooling.
-Its complete live behavior remains unverified. Gmail additionally needs the `gmail` extra and your
-local OAuth credentials. Missing notification settings fall back to console output.
+The provider refuses API-key authentication, removes API-key environment overrides from its
+child process, uses isolated read-only runs with shell/web tools disabled, and has no paid
+fallback. `llm-doctor` makes one small explicit model request without candidate/job data.
+Included API credits are not wired up because the application cannot enforce a credits-only
+billing boundary. Check your subscription usage settings and disable any account-level
+automatic credit purchases; this project never purchases credits.
 
-## Example workflow
+Legacy Gemini CLI and unverified ApplyPilot submission are disabled. Existing databases are
+migrated on opening with a `*.before-v2.db` backup. Existing job IDs and application records
+are retained; observations lost before this version cannot be reconstructed.
 
-After configuring real facts, credentials, and job sources:
+## Daily operation
 
 ```bash
 jobhunt discover
-jobhunt jobs --limit 20
-jobhunt filter --limit 10
-jobhunt tailor --limit 5
-jobhunt apply --dry-run --limit 1
+jobhunt filter --limit 30
+jobhunt tailor --limit 10
+jobhunt apply --dry-run --limit 10
 jobhunt inbox
 jobhunt status
+jobhunt export
 ```
 
-To use sponsor signals, download disclosure data yourself, then run
-`jobhunt sponsors-import path/to/disclosure.csv`. `jobhunt probe --top 200` guesses boards from
-imported employers; review matches with `jobhunt companies` before relying on them.
-Historical sponsorship is a ranking signal, not a guarantee about a current role.
+The live cap defaults to 10 applications per day. It is a ceiling, not a requirement to fill
+with weak matches. Daily scoring is bounded to 30 jobs by default, reserving model-call
+capacity for document preparation. Cover letters are generated only when marked required; the form adapter
+can detect that requirement and return a job to document preparation.
 
-Unknown questions and obstacles move jobs into `needs_human`; the rest of the queue can continue.
-Use `jobhunt answer <id> '<answer>'`, `jobhunt done <id>`, or `jobhunt skip <id>` to resolve requests.
-Interrupted application attempts also require human reconciliation before retrying.
+Use `jobhunt job JOB_ID` to inspect a job's sources, observations, decisions, documents,
+attempts, and human requests. `jobhunt export` writes **all jobs** to `reports/jobs.csv` and
+the full private ledger to `reports/ledger.json`, including rejected/closed jobs.
 
-Live submission requires the configured successful dry-run count (20 by default) and an explicit
-`jobhunt go-live`. `jobhunt daily` runs the pipeline and can submit after live mode is enabled;
-review browser behavior in dry runs before scheduling it. No schedule is installed during setup.
+See the [operator guide](docs/operations.md) for Telegram setup, exact approvals, duplicate
+review, browser takeover, retrying documents, linking employer URLs, and live promotion.
 
-## Local data and credentials
+## Live submission gates
 
-Personal profiles, answer banks, company/query lists, `.env` files, OAuth files, SQLite databases,
-resumes, reports, and generated drafts are ignored by Git. Tracked examples contain fictional data.
-Tests use temporary copies of those examples, independent of your local configuration.
+Live operation requires successful dry runs (20 by default), explicit `jobhunt go-live`,
+a reviewed unchanged profile, valid artifact hashes, and current employer availability.
+Initially every application also needs your approval of its prepared form/documents.
 
-Candidate facts and job descriptions are sent to Gemini for scoring/tailoring. Phone, email, and profile
-links are omitted from those API summaries, but application payloads are supplied to the Gemini CLI
-browser backend. Gmail reads headers and snippets rather than full message bodies. Notification
-payloads may contain application questions; choose a private topic or protected ntfy server.
-
-## Tests and current limits
+After at least three distinct individually approved, confirmed live trials, you may explicitly
+promote `greenhouse-classic-v1`. Promotion covers previously validated form shapes only;
+changed forms/questions and unapproved certifications still pause.
 
 ```bash
-python -m pytest -q
+jobhunt go-live
+jobhunt review-application JOB_ID
+# Review the local form screenshot and documents, then approve its request.
+jobhunt approve REQUEST_ID
+jobhunt apply --live --limit 1
+# Only after reviewing the required successful trials:
+jobhunt workflow-enable greenhouse-classic-v1 --evidence 'Reviewed the form mappings and employer receipts'
+jobhunt pause-live
 ```
 
-CI runs the offline suite on Python 3.11. HTTP requests must be mocked in tests, and no personal
-configuration, API keys, browser session, or external account is required.
+A process exit or model response is not proof of submission. Missing receipts or interrupted
+submission boundaries enter reconciliation. `done` and `retry` require human evidence, preventing
+blind repeated submissions. Applications remain in submission totals after interviews/rejections.
 
-The suite covers filtering, sponsor imports, tailoring checks, quota/fallback behavior, application gates,
-human-inbox transitions, and email-event handling. Passing tests do **not** verify live ATS feeds,
-Gemini availability, browser submissions, Gmail OAuth, ntfy delivery, or launchd scheduling.
-Workday schemas and the optional ApplyPilot command template need installation-specific validation.
-Resume checks detect selected classes of unsupported claims; they are not a complete factual verifier.
-LinkedIn output is drafted locally for manual review and posting.
+## Local data and privacy
 
-## Development
+Profiles, answers, `.env`, OAuth files, SQLite databases/backups, browser sessions, screenshots,
+resumes, and reports remain local and ignored by Git. Back up the ignored `data/` and `out/`
+directories yourself; the ledger and browser sessions contain personal information.
 
-See [development notes](docs/development.md) for configuration, tests, and the snapshot workflow.
+Candidate facts and job descriptions are supplied to the configured model for fit/tailoring.
+Phone/email/links are omitted from model summaries. Telegram receives job/request summaries
+and your replies; the bot accepts commands only from your configured private user/chat.
+Gmail integration, when explicitly enabled, reads headers/snippets, not full bodies. LinkedIn
+refresh output remains a local draft for manual review and posting.
 
-For coding agents, start with the shared [project instructions](AGENTS.md),
-[current handoff](docs/handoff.md), and [decision log](docs/decisions.md).
-Scoped instructions cover core code, discovery, applications, configuration, and tests;
-Claude entry points import those same rules. Other agents can use this onboarding prompt:
+## Tests
+
+```bash
+python -m pytest -q -m 'not browser'
+# Local browser/PDF acceptance tests, using only loopback fixture forms:
+JOBHUNT_BROWSER_TESTS=1 python -m pytest -q -m browser
+```
+
+The browser suite requires the `pdf` extra and Chromium. It covers dry-run request blocking,
+approval, receipts, changed forms/consents, required letters, session recovery, availability,
+and PDF completeness/overflow. Tests use fictional temporary profiles; external Requests calls
+are blocked unless explicitly mocked. See [development](docs/development.md).
+
+For coding agents, read [AGENTS.md](AGENTS.md), [handoff](docs/handoff.md), and relevant folder instructions:
 
 > Read root AGENTS.md, docs/handoff.md, and relevant folder instructions. Consult docs/decisions.md for relevant decisions, then inspect the current code and Git status before making changes.
 
-Maintain shared memory using the [development workflow](docs/development.md#agent-memory-workflow).
-Agent tools differ in automatic loading; these files do not guarantee automatic updates.
-
-This repository contains no license grant. An optional ApplyPilot integration must be evaluated
-against the license of the specific implementation being used.
+This repository contains no license grant. See [architecture](docs/architecture.md) and
+[decisions](docs/decisions.md) for implementation boundaries and lasting rationale.

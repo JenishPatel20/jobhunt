@@ -1,9 +1,12 @@
 """MODULE 6 - Track: SQLite is the source of truth; Gmail (read-only, metadata+snippet) -> events; daily digest."""
 import csv
 import re
+import json
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from email.utils import parseaddr
 
-from .util import norm_company, now_iso, today
+from .util import norm_company, now_iso, today, day_start_utc
 
 RULES = [  # order matters: first match wins
     ("offer", r"offer letter|pleased to offer|extend (you )?an offer|offer of employment"),
@@ -23,34 +26,82 @@ def classify_email(subject: str, snippet: str = "") -> str | None:
     return None
 
 
-def match_job(db, sender: str, subject: str, snippet: str = "") -> str | None:
+def match_candidates(db, sender, subject, snippet=''):
     name, addr = parseaddr(sender)
-    domain = addr.split("@")[-1].split(".")[0].lower() if "@" in addr else ""
-    hay = norm_company(f"{name} {subject} {snippet}")
-    best, best_len = None, 0
-    for j in db.q("SELECT id, company_norm FROM jobs WHERE status IN ('applied','interviewing','assessment')"):
-        cn = j["company_norm"]
-        if cn and (re.search(rf"\b{re.escape(cn)}\b", hay) or cn.replace(" ", "") == domain) and len(cn) > best_len:
-            best, best_len = j["id"], len(cn)
-    return best
+    domain = addr.split('@')[-1].split('.')[0].lower() if '@' in addr else ''
+    hay = norm_company(f'{name} {subject} {snippet}')
+    candidates = []
+    for job in db.q("SELECT * FROM jobs WHERE applied_at IS NOT NULL OR status IN ('applied','interviewing','assessment')"):
+        company = job['company_norm']
+        if company and (re.search(rf'\b{re.escape(company)}\b', hay) or company.replace(' ', '') == domain):
+            candidates.append(job)
+    explicit = []
+    for job in candidates:
+        metadata = json.loads(job.get('metadata_json') or '{}')
+        ids = [job.get('source_job_id'), metadata.get('requisition_id')]
+        title = re.sub(r'\s+', ' ', job['title']).casefold()
+        if any(value and len(str(value)) >= 4 and re.search(r'(?<![\w-])' + re.escape(str(value)) + r'(?![\w-])', subject + ' ' + snippet, re.I) for value in ids) or title in (subject + ' ' + snippet).casefold():
+            explicit.append(job)
+    return explicit or candidates
 
 
-def ingest(db, msgs: list[dict]) -> int:
-    """msgs: {id, from, subject, snippet, date}"""
+def match_job(db, sender, subject, snippet=''):
+    candidates = match_candidates(db, sender, subject, snippet)
+    return candidates[0]['id'] if len(candidates) == 1 else None
+
+
+def event_date(value):
+    try:
+        parsed = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        try:
+            parsed = parsedate_to_datetime(value)
+        except (ValueError, TypeError, IndexError):
+            return None
+    return parsed.replace(tzinfo=parsed.tzinfo or timezone.utc).astimezone(timezone.utc).isoformat(timespec='seconds')
+
+
+def apply_event(db, event):
+    previous = [event_date(row['received_at']) for row in db.q('SELECT received_at FROM events WHERE job_id=? AND id<>?', (event['job_id'], event['id']))]
+    latest = max((value for value in previous if value), default=None)
+    if event['kind'] in STATUS_FOR and (not latest or event['received_at'] >= latest):
+        db.set_job(event['job_id'], status=STATUS_FOR[event['kind']])
+
+
+def ingest(db, msgs):
     n = 0
-    for m in msgs:
-        if db.one("SELECT 1 FROM events WHERE gmail_msg_id=?", (m["id"],)):
+    for message in msgs:
+        if db.one('SELECT 1 FROM events WHERE gmail_msg_id=?', (message['id'],)):
             continue
-        kind = classify_email(m["subject"], m.get("snippet", ""))
+        kind = classify_email(message['subject'], message.get('snippet', ''))
         if not kind:
             continue
-        jid = match_job(db, m["from"], m["subject"], m.get("snippet", ""))
-        db.x("INSERT INTO events(job_id,kind,subject,sender,received_at,gmail_msg_id) VALUES(?,?,?,?,?,?)",
-             (jid, kind, m["subject"][:200], m["from"][:200], m.get("date", now_iso()), m["id"]))
-        if jid and kind in STATUS_FOR:
-            db.set_job(jid, status=STATUS_FOR[kind])
+        candidates = match_candidates(db, message['from'], message['subject'], message.get('snippet', ''))
+        received = event_date(message.get('date'))
+        jid = candidates[0]['id'] if len(candidates) == 1 and received else None
+        event = db.x('INSERT INTO events(job_id,kind,subject,sender,received_at,gmail_msg_id) VALUES(?,?,?,?,?,?)',
+                     (jid, kind, message['subject'][:200], message['from'][:200], received or now_iso(), message['id']))
+        if jid:
+            apply_event(db, db.one('SELECT * FROM events WHERE id=?', (event.lastrowid,)))
+        else:
+            db.x('INSERT INTO email_reviews(event_id,candidates_json) VALUES(?,?)',
+                 (event.lastrowid, json.dumps([job['id'] for job in candidates])))
+            db.x('INSERT INTO outbox(text) VALUES(?)', (f'Email event #{event.lastrowid} needs a job match. Review with jobhunt email-reviews; resolve with jobhunt email-link EVENT_ID JOB_ID.',))
         n += 1
     return n
+
+
+def link_event(db, event_id, job_id):
+    event = db.one('SELECT * FROM events WHERE id=?', (event_id,))
+    review = db.one("SELECT * FROM email_reviews WHERE event_id=? AND status='open'", (event_id,))
+    if not event or not review or not db.one('SELECT id FROM jobs WHERE id=?', (job_id,)):
+        return False
+    with db.conn:
+        db.conn.execute('UPDATE events SET job_id=? WHERE id=?', (job_id, event_id))
+        db.conn.execute("UPDATE email_reviews SET status='resolved' WHERE event_id=?", (event_id,))
+    db.record(job_id, 'email_linked_by_human', {'event_id': event_id})
+    apply_event(db, db.one('SELECT * FROM events WHERE id=?', (event_id,)))
+    return True
 
 
 def gmail_fetch(root, days: int = 14, max_results: int = 100) -> list[dict]:
@@ -70,7 +121,13 @@ def gmail_fetch(root, days: int = 14, max_results: int = 100) -> list[dict]:
             creds = InstalledAppFlow.from_client_secrets_file(str(root / "credentials.json"), scopes).run_local_server(port=0)
         tok.write_text(creds.to_json())
     svc = build("gmail", "v1", credentials=creds)
-    ids = svc.users().messages().list(userId="me", q=f"newer_than:{days}d -category:promotions", maxResults=max_results).execute().get("messages", [])
+    ids, page_token = [], None
+    while True:
+        page = svc.users().messages().list(userId="me", q=f"newer_than:{days}d -category:promotions", maxResults=max_results, pageToken=page_token).execute()
+        ids.extend(page.get('messages', []))
+        page_token = page.get('nextPageToken')
+        if not page_token:
+            break
     out = []
     for i in ids:
         m = svc.users().messages().get(userId="me", id=i["id"], format="metadata", metadataHeaders=["From", "Subject", "Date"]).execute()
@@ -79,29 +136,34 @@ def gmail_fetch(root, days: int = 14, max_results: int = 100) -> list[dict]:
     return out
 
 
-def export_csv(db, path) -> int:
-    rows = db.q("SELECT company,title,location,source,status,fit_final,sponsor_tier,applied_at,apply_url FROM jobs "
-                "WHERE status NOT IN ('new','rejected','skipped') ORDER BY fit_final DESC")
-    with open(path, "w", newline="") as f:
-        w = csv.DictWriter(f, fieldnames=list(rows[0].keys()) if rows else ["company"])
-        w.writeheader()
-        w.writerows(rows)
+def export_csv(db, path):
+    rows = db.q('SELECT id,company,title,location,source,status,fit_raw,fit_final,sponsor_tier,availability,discovered_at,last_seen_at,applied_at,apply_url,reject_reason FROM jobs ORDER BY discovered_at DESC')
+    fields = list(rows[0]) if rows else ['id', 'company', 'title', 'status']
+    with open(path, 'w', newline='') as output:
+        writer = csv.DictWriter(output, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: ("'" + v if isinstance(v, str) and v.lstrip().startswith(('=', '+', '-', '@')) else v) for k, v in row.items()})
     return len(rows)
 
 
-def digest(db) -> str:
-    c = lambda s, a=(): db.one(s, a)["n"]
-    lines = [f"jobhunt digest {today()}",
-             f"Queued (7+): {c('SELECT COUNT(*) n FROM jobs WHERE status=?', ('queued',))} | tailored: {c('SELECT COUNT(*) n FROM jobs WHERE status=?', ('tailored',))} | "
-             f"applied total: {c('SELECT COUNT(*) n FROM jobs WHERE status=?', ('applied',))}",
-             f"Applied last 24h: {c('SELECT COUNT(*) n FROM jobs WHERE applied_at>=?', (today(),))} | dry runs ok: {db.kv_get('dry_runs_ok', '0')}"]
-    nh = db.q("SELECT id, question FROM human_requests WHERE status='open'")
-    if nh:
-        lines.append("WAITING ON YOU: " + "; ".join(f"#{r['id']} {r['question'][:60]}" for r in nh))
-    ev = db.q("SELECT e.kind, j.company, j.title FROM events e LEFT JOIN jobs j ON j.id=e.job_id WHERE e.received_at>=? ORDER BY e.id DESC", (today(),))
-    for e in ev[:10]:
-        lines.append(f"  {e['kind'].upper()}: {e['company'] or '?'} - {e['title'] or ''}")
-    tot = {r["kind"]: r["n"] for r in db.q("SELECT kind, COUNT(*) n FROM events GROUP BY kind")}
-    if tot:
-        lines.append("Responses so far: " + ", ".join(f"{k}={v}" for k, v in tot.items()))
-    return "\n".join(lines)
+def digest(db):
+    count = lambda sql, args=(): db.one(sql, args)['n']
+    states = {r['status']: r['n'] for r in db.q('SELECT status,COUNT(*) n FROM jobs GROUP BY status')}
+    lines = [f'jobhunt digest {today()}',
+             f"Observed: {count('SELECT COUNT(*) n FROM observations')} | unique jobs: {count('SELECT COUNT(*) n FROM jobs')}",
+             f"Shortlisted: {states.get('queued', 0)} | prepared: {states.get('tailored', 0)} | closed: {states.get('closed', 0)}",
+             'Confirmed submitted total: ' + str(count("SELECT COUNT(DISTINCT job_id) n FROM applications WHERE status IN ('SUBMITTED','RECONCILED_SUBMITTED')")),
+             'Confirmed submitted today: ' + str(count("SELECT COUNT(DISTINCT job_id) n FROM applications WHERE status IN ('SUBMITTED','RECONCILED_SUBMITTED') AND finished_at>=?", (day_start_utc(),))),
+             'Uncertain submissions: ' + str(count("SELECT COUNT(*) n FROM applications WHERE status IN ('IN_PROGRESS','SUBMISSION_UNKNOWN')"))]
+    for reason in db.q("SELECT reject_reason,COUNT(*) n FROM jobs WHERE status='rejected' GROUP BY reject_reason"):
+        lines.append(f"Rejected {reason['reject_reason']}: {reason['n']}")
+    for req in db.q("SELECT id,kind,question FROM human_requests WHERE status='open'"):
+        lines.append(f"WAITING ON YOU #{req['id']} ({req['kind']}): {req['question'][:80]}")
+    reviews = count("SELECT COUNT(*) n FROM email_reviews WHERE status='open'")
+    if reviews:
+        lines.append(f'Email matches awaiting review: {reviews}')
+    failures = count("SELECT COUNT(*) n FROM source_runs WHERE state<>'ok' AND at>=?", (day_start_utc(),))
+    lines.append(f'Source failures/partial runs today: {failures}')
+    lines.append('Outcomes: ' + ', '.join(f'{s}={n}' for s, n in states.items() if s in {'interviewing', 'assessment', 'offer', 'rejected_by_company'}))
+    return '\n'.join(lines)

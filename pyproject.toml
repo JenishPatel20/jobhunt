@@ -4,7 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = ["pyyaml", "requests", "openpyxl"]
 [project.optional-dependencies]
-pdf = ["playwright"]
+pdf = ["playwright", "pypdf"]
 scrape = ["python-jobspy", "apify-client"]
 gmail = ["google-api-python-client", "google-auth-oauthlib"]
 dev = ["pytest"]
@@ -15,3 +15,5 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 [tool.setuptools]
 packages = ["jobhunt", "jobhunt.discover", "jobhunt.apply"]
+[tool.pytest.ini_options]
+markers = ["browser: local Chromium and loopback fixture acceptance tests (opt in)"]

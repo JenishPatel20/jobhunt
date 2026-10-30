@@ -12,12 +12,16 @@ Read the [root instructions](../AGENTS.md) and
   environment overrides. Preserve this isolation; mock responses at the boundary.
 - The Requests guard does not block every SDK, subprocess, browser, or SMTP path.
   Explicitly replace those boundaries with fakes when exercising them.
-- Keep fixtures fictional and small. Optional dependency tests should use fakes
+- Keep fixtures fictional and small. Offline optional dependency tests should use fakes
   or narrowly justified skips rather than requiring real accounts or credentials.
 - Test meaningful behavior and regression cases: state transitions, identity,
   retries/cooldowns, factual fallbacks, application gates, and human resolution.
 - For database changes, exercise existing data as well as a fresh schema. For
   application changes, assert relevant persisted outcomes and avoid live backends.
+
+Browser tests opt in with `JOBHUNT_BROWSER_TESTS=1` and use loopback fixture forms
+only. See development notes for Chromium/PDF dependencies; never visit a live ATS
+from a test.
 
 Record the exact commands/outcomes in the [handoff](../docs/handoff.md).
 Passing offline tests does not verify ATS feeds, Gemini, browser submissions,

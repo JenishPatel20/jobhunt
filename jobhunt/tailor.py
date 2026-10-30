@@ -2,11 +2,17 @@
 Guards: every bullet must cite a real source id; numbers must exist in the source bullet; known tech names
 not present anywhere in your facts are rejected. Failing bullets fall back to your original wording."""
 import html
+import hashlib
 import json
 import re
+import uuid
+from html.parser import HTMLParser
 from pathlib import Path
 
 from .llm import LLMError, QuotaExceeded
+from .db import dumps, fingerprint
+from . import availability
+from .util import now_iso
 
 # Known tech names whose appearance must be backed by your facts. Ambiguous English words (go, rust, swift, spark) omitted on purpose.
 LEXICON = set("""aws gcp azure kubernetes k8s terraform ansible jenkins kafka rabbitmq redis mongodb cassandra dynamodb
@@ -76,19 +82,28 @@ def build_plan(ctx, llm, profile, job: dict) -> tuple[dict, list[str]]:
     except (QuotaExceeded, LLMError) as e:
         return plan, [f"llm unavailable, used locked text: {e}"]
 
+    if not isinstance(raw, dict):
+        return plan, ['invalid model plan; used locked facts']
+    owners = {it['id']: {b['id'] for b in it['bullets']} for sec in ('experience', 'projects') for it in profile.p[sec]}
+
     def clean(items, valid_ids, keep_all_ids=None):
         out = []
-        for it in items or []:
-            if it.get("id") not in valid_ids:
+        seen = set()
+        for it in items if isinstance(items, list) else []:
+            if not isinstance(it, dict) or not isinstance(it.get('id'), str) or it.get("id") not in valid_ids or it['id'] in seen:
                 continue
+            seen.add(it['id'])
             bl2 = []
-            for b in it.get("bullets", []):
+            for b in it.get("bullets", []) if isinstance(it.get('bullets', []), list) else []:
+                if not isinstance(b, dict):
+                    continue
                 sid = b.get("src")
-                if sid not in src:
+                if not isinstance(sid, str) or sid not in owners[it['id']]:
                     notes.append(f"dropped bullet with bad src {sid}")
                     continue
-                text = str(b.get("text", "")).strip()
-                bad = violations(text, src[sid], allowed)
+                text = b.get('text', '').strip() if isinstance(b.get('text'), str) else ''
+                source_tokens = {w.lower().strip('.-') for w in TOK.findall(src[sid])}
+                bad = violations(text, src[sid], source_tokens)
                 if bad or not text:
                     notes.append(f"{sid}: reverted ({'; '.join(bad) or 'empty'})")
                     text = src[sid]
@@ -111,7 +126,9 @@ def build_plan(ctx, llm, profile, job: dict) -> tuple[dict, list[str]]:
         plan["projects"] = proj
     skills = {}
     flat = profile.skills_flat()
-    for cat, items in (raw.get("skills") or {}).items():
+    for cat, items in (raw.get("skills") if isinstance(raw.get('skills'), dict) else {}).items():
+        if not isinstance(items, list):
+            continue
         if cat in profile.p["skills"]:
             keep = [i for i in items if str(i).lower() in flat and i in profile.p["skills"][cat]]
             keep += [i for i in profile.p["skills"][cat] if i not in keep]   # never drop skills silently
@@ -129,9 +146,9 @@ def build_plan(ctx, llm, profile, job: dict) -> tuple[dict, list[str]]:
     return plan, notes
 
 
-CSS = """body{font:10.5pt/1.25 Arial,Helvetica,sans-serif;margin:0.5in;color:#000}h1{font-size:18pt;margin:0;text-align:center}
+CSS = """@page{size:Letter;margin:0.5in}*{box-sizing:border-box}body{font:10.5pt/1.25 Arial,Helvetica,sans-serif;margin:0;color:#000;overflow-wrap:anywhere}h1{font-size:18pt;margin:0;text-align:center}
 .c{text-align:center;font-size:9.5pt;margin-bottom:6px}h2{font-size:11pt;border-bottom:1px solid #000;margin:10px 0 4px;text-transform:uppercase}
-.r{display:flex;justify-content:space-between}ul{margin:2px 0 4px 18px;padding:0}li{margin:0}"""
+.r{display:flex;justify-content:space-between;gap:12px}.r span{flex-shrink:0}h2,.r{break-after:avoid}ul{margin:2px 0 4px 18px;padding:0}li{margin:0;break-inside:avoid}"""
 
 
 def render_html(profile, plan: dict) -> str:
@@ -171,13 +188,54 @@ def html_to_pdf(html_str: str, pdf_path: Path) -> bool:
         from playwright.sync_api import sync_playwright
     except ImportError:
         return False
-    with sync_playwright() as pw:
-        b = pw.chromium.launch()
-        pg = b.new_page()
-        pg.set_content(html_str)
-        pg.pdf(path=str(pdf_path), format="Letter", print_background=True)
-        b.close()
-    return True
+    try:
+        with sync_playwright() as pw:
+            b = pw.chromium.launch()
+            try:
+                pg = b.new_page(viewport={'width': 720, 'height': 1056})
+                pg.set_content(html_str)
+                pg.emulate_media(media='print')
+                overflow = pg.evaluate('''() => [...document.body.querySelectorAll('*')].some(e => {
+                    const r=e.getBoundingClientRect();return r.width && (r.left < -1 || r.right > 721 || e.scrollWidth > e.clientWidth+2);
+                })''')
+                if overflow:
+                    return False
+                pg.pdf(path=str(pdf_path), format="Letter", print_background=True, prefer_css_page_size=True)
+            finally:
+                b.close()
+        return validate_pdf(pdf_path, html_str)['valid']
+    except Exception:
+        return False
+
+
+def validate_pdf(path, html_str):
+    """Check extraction/completeness; visual layout additionally uses DOM overflow checks."""
+    class VisibleText(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.hidden = 0
+            self.parts = []
+        def handle_starttag(self, tag, attrs):
+            if tag in {'head', 'style', 'script'}:
+                self.hidden += 1
+        def handle_endtag(self, tag):
+            if tag in {'head', 'style', 'script'}:
+                self.hidden -= 1
+        def handle_data(self, data):
+            if not self.hidden and data.strip():
+                self.parts.append(data)
+    try:
+        from pypdf import PdfReader
+        reader = PdfReader(str(path))
+        normalize = lambda text: re.sub(r'\s+', '', text).casefold()
+        extracted = normalize(' '.join(page.extract_text() or '' for page in reader.pages))
+        parser = VisibleText()
+        parser.feed(html_str)
+        missing = [part for part in parser.parts if normalize(part) not in extracted]
+        return {'valid': bool(extracted) and not missing and 0 < len(reader.pages) <= 3,
+                'pages': len(reader.pages), 'missing_fragments': len(missing)}
+    except Exception as error:
+        return {'valid': False, 'reason': type(error).__name__}
 
 
 CL_SYSTEM = ("You write concise, honest cover letters for an entry-level candidate. Use ONLY the facts provided. "
@@ -202,32 +260,59 @@ def cover_letter(ctx, llm, profile, job: dict) -> tuple[str, list[str]]:
         return "", [f"cover letter skipped: {e}"]
     bad = violations(text, src + " " + job["company"] + " " + job["title"], allowed)
     # numbers in a letter must exist in facts; company/title numbers allowed via source concat
-    if bad or len(text.split()) > n * 1.3:
+    if bad or len(text.split()) > n:
         return "", [f"cover letter rejected: {'; '.join(bad) or 'too long'}"]
     return text, []
 
 
-def run(ctx, llm, profile, limit: int | None = None) -> dict:
-    db, stats = ctx.db, {"tailored": 0, "notes": 0, "pdf": 0}
-    for job in db.q("SELECT * FROM jobs WHERE status='queued' ORDER BY fit_final DESC")[: limit or 10**6]:
-        d = ctx.out_dir / job["id"]
+def run(ctx, llm, profile, limit: int | None = None, checker=None) -> dict:
+    db, stats = ctx.db, {"tailored": 0, "notes": 0, "pdf": 0, 'blocked': 0}
+    for job in db.q("SELECT * FROM jobs WHERE status='queued' ORDER BY fit_final DESC,boost DESC")[: limit or 10**6]:
+        result = availability.check(ctx, job, 'before_tailoring', checker)
+        if result.state != 'open':
+            if result.state == 'uncertain' and db.one('SELECT status FROM jobs WHERE id=?', (job['id'],))['status'] != 'new':
+                from .apply import hitl
+                from .notify import Notifier
+                hitl.open_request(db, Notifier(db), job, 'availability', 'Could not confirm that the employer posting is open.',
+                                  details={'resume_status': 'queued', 'evidence': result.evidence})
+            stats['blocked'] += 1
+            continue
+        d = ctx.out_dir / job["id"] / uuid.uuid4().hex
         d.mkdir(parents=True, exist_ok=True)
         plan, notes = build_plan(ctx, llm, profile, job)
+        if any(note.startswith('llm unavailable') for note in notes):
+            stats['blocked'] += 1
+            continue
         h = render_html(profile, plan)
         (d / "resume.html").write_text(h)
         base = profile.p["candidate"]["name"].split()
         fname = f"{base[0]}_{base[-1]}_Resume"
         pdf = d / f"{fname}.pdf"
-        resume_path = str(pdf) if html_to_pdf(h, pdf) else str(d / "resume.html")
-        stats["pdf"] += resume_path.endswith(".pdf")
-        cl, n2 = cover_letter(ctx, llm, profile, job)
+        valid = html_to_pdf(h, pdf)
+        resume_path = str(pdf) if valid else None
+        stats["pdf"] += bool(valid)
+        cl, n2 = cover_letter(ctx, llm, profile, job) if job['cover_required'] else ('', [])
         cover_path = None
         if cl:
-            cp = d / "cover_letter.md"
-            cp.write_text(cl)
-            cover_path = str(cp)
+            cp = d / 'cover_letter.pdf'
+            letter_html = f'<html><head><style>{CSS}</style></head><body>' + ''.join(f'<p>{html.escape(p)}</p>' for p in cl.split('\n\n')) + '</body></html>'
+            (d / 'cover_letter.html').write_text(letter_html)
+            if html_to_pdf(letter_html, cp):
+                cover_path = str(cp)
+            else:
+                valid = False
+        if job['cover_required'] and not cover_path:
+            valid = False
         (d / "tailor_notes.json").write_text(json.dumps(notes + n2, indent=2))
-        db.set_job(job["id"], status="tailored", resume_path=resume_path, cover_path=cover_path)
-        stats["tailored"] += 1
+        (d / 'plan.json').write_text(dumps(plan))
+        for kind, path in [('resume', resume_path), ('cover', cover_path)]:
+            if path:
+                db.x('INSERT INTO artifacts(job_id,at,kind,path,sha256,profile_hash,source_json,validation_json) VALUES(?,?,?,?,?,?,?,?)',
+                     (job['id'], now_iso(), kind, path, hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+                      profile.fingerprint(), dumps({'facts': profile.p, 'plan': plan, 'description_hash': job['description_hash']}),
+                      dumps({'valid': valid, 'text_and_layout_checked': True})))
+        db.set_job(job["id"], status="tailored" if valid else 'document_blocked', resume_path=resume_path,
+                   cover_path=cover_path, documents_valid=int(valid), document_profile_hash=profile.fingerprint())
+        stats['tailored' if valid else 'blocked'] += 1
         stats["notes"] += len(notes + n2)
     return stats

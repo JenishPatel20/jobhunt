@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from conftest import confirm_profile, prepare_job
+
 from jobhunt import apply as apply_mod, filter as filt, learn, tailor, track
 from jobhunt.apply import hitl
 from jobhunt.apply.backends import FakeBackend, GeminiCLIBackend, Result, parse_final
@@ -39,10 +41,10 @@ def test_location_and_years():
 @pytest.mark.parametrize("kw,ok", [
     ({}, True),
     ({"title": "Senior Software Engineer"}, False),
-    ({"title": "Software Engineer II"}, False),
+    ({"title": "Software Engineer II"}, True),
     ({"title": "Sales Engineer"}, False),
     ({"title": "Account Executive"}, False),
-    ({"title": "Software Engineer Intern"}, False),
+    ({"title": "Software Engineer Intern"}, True),
     ({"title": "Associate Attorney"}, False),
     ({"title": "Associate Software Engineer"}, True),
     ({"title": "New Grad - Member of Technical Staff"}, True),
@@ -90,14 +92,14 @@ def test_filter_pipeline_bands_and_boost(ctx):
     assert st["rejected"] == 1
     acme = db.one("SELECT * FROM jobs WHERE company_norm='acme'")
     beta = db.one("SELECT * FROM jobs WHERE company_norm='beta'")
-    assert acme["status"] == "queued" and acme["fit_final"] == 7.0       # 6 + strong boost 1.0
+    assert acme["status"] == "gap" and acme["fit_final"] == 6.0         # sponsorship does not change technical fit
     assert beta["status"] == "gap"                                        # 6, no boost
     assert json.loads(beta["missing_skills"]) == ["kubernetes"]
 
 
 def test_filter_llm_rejection_and_quota(ctx):
     ctx.db.upsert_job(job())
-    assert filt.run(ctx, fit_llm(9, sponsorship_signal="negative"), Profile(ctx))["rejected"] == 1
+    assert filt.run(ctx, fit_llm(9, sponsorship_signal="negative"), Profile(ctx))["needs_human"] == 1
 
     def boom(*a): raise QuotaExceeded("cap")
     ctx.db.upsert_job(job(url="https://x/2", title="ML Engineer", company="Zed"))
@@ -181,29 +183,32 @@ def test_tailor_run_and_cover_letter_guard(ctx, monkeypatch):
         return "Hello,\nI built REST services in Python with FastAPI and PostgreSQL. I also ran Kubernetes clusters.\nAlex Example"
     st = tailor.run(ctx, FakeLLM(handler), prof)
     row = ctx.db.one("SELECT * FROM jobs WHERE id=?", (jid,))
-    assert row["status"] == "tailored" and row["resume_path"].endswith((".pdf", ".html"))
+    assert row["status"] == "document_blocked" and row["resume_path"] is None
     assert row["cover_path"] is None                                      # Kubernetes claim rejected
-    assert "Alex Example" in Path(ctx.out_dir / jid / "resume.html").read_text()
+    assert "Alex Example" in next((ctx.out_dir / jid).rglob("resume.html")).read_text()
 
 
 def tailored_job(ctx, url="https://x/9", company="Acme"):
     ctx.db.upsert_job(job(url=url, company=company))
     jid = ctx.db.job_id(url)
-    ctx.db.set_job(jid, status="tailored", fit_final=8, resume_path="/tmp/r.pdf")
+    prepare_job(ctx, jid)
     return jid
 
 
 def fill_profile(ctx):
+    confirm_profile(ctx)
     w, pf = ctx.profile["work_authorization"], ctx.profile["preferences"]
     w["authorized_to_work_us_now"], w["earliest_start_date"] = "Yes", "Jan 2027"
     pf["salary_answer_text"], pf["willing_to_relocate"] = "Open", "Yes"
+    (ctx.root / "config" / "profile.yaml").write_text(yaml.safe_dump(ctx.profile))
+    ctx.db.kv_set("reviewed_profile_hash", Profile(ctx).fingerprint())
 
 
 def test_apply_preflight_blocks_without_answers(ctx):
     tailored_job(ctx)
-    ctx.profile["preferences"]["salary_answer_text"] = None
-    with pytest.raises(SystemExit):
-        apply_mod.run(ctx, Profile(ctx), Notif(), backend=FakeBackend())
+    ctx.profile["candidate"]["email"] = None
+    result = apply_mod.run(ctx, Profile(ctx), Notif(), backend=FakeBackend())
+    assert result["needs_human"] == 1
 
 
 def test_apply_dry_gate_and_live_refusal(ctx):
@@ -228,17 +233,17 @@ def test_hitl_flow_answer_and_done(ctx):
     n = Notif()
     fb = FakeBackend([Result("NEEDS_HUMAN", kind="question", text="Why do you want to work here?")])
     st = apply_mod.run(ctx, Profile(ctx), n, backend=fb)
-    assert st["needs_human"] == 1 and "jobhunt answer 1" in n.sent[-1]
+    assert st["needs_human"] == 1 and "/answer 1" in n.sent[-1]
     assert ctx.db.one("SELECT status FROM jobs WHERE id=?", (jid,))["status"] == "needs_human"
-    assert hitl.resolve(ctx.db, "answer", 1, "Because I like the product.")
+    assert hitl.resolve(ctx.db, "answer", 1, "Because I like the product.", profile_hash=Profile(ctx).fingerprint())
     assert not hitl.resolve(ctx.db, "answer", 999, "nope")
     assert ctx.db.one("SELECT status FROM jobs WHERE id=?", (jid,))["status"] == "tailored"
-    assert "learned_answers_by_question" in Profile(ctx).answers_payload()
+    assert "learned_answers_by_question" in Profile(ctx).answers_payload(ctx.db.one("SELECT * FROM jobs WHERE id=?", (jid,)))
     # captcha -> done
     fb = FakeBackend([Result("NEEDS_HUMAN", kind="captcha", text="reCAPTCHA")])
     apply_mod.run(ctx, Profile(ctx), n, backend=fb)
     assert not hitl.resolve(ctx.db, "answer", 2, "anything")
-    assert hitl.resolve(ctx.db, "done", 2)
+    assert hitl.resolve(ctx.db, "done", 2, "Employer receipt checked")
     assert ctx.db.one("SELECT status FROM jobs WHERE id=?", (jid,))["status"] == "applied"
 
 
@@ -258,20 +263,9 @@ def test_ntfy_notification(ctx, monkeypatch):
 
 
 def test_gemini_backend_uses_isolated_browser_tools(ctx, monkeypatch):
-    calls = []
-    def fake_run(cmd, **kwargs):
-        cfg = json.loads((Path(kwargs["cwd"]) / ".gemini" / "settings.json").read_text())
-        calls.append((cmd, cfg))
-        return type("Process", (), {"stdout": json.dumps({"response": '{"status":"DRY_RUN_READY","kind":"","text":"","detail":"ready"}'}),
-                                    "stderr": "", "returncode": 0})()
-    monkeypatch.setattr("jobhunt.apply.backends.subprocess.run", fake_run)
     backend = GeminiCLIBackend(ctx.settings)
-    result = backend.apply({"apply_url": "https://example.com", "company": "Example", "title": "Engineer",
-                            "resume_path": "/tmp/resume.pdf", "cover_path": None}, {}, True)
-    assert result.status == "DRY_RUN_READY"
-    assert calls[0][0][0] == "gemini"
-    assert calls[0][1]["tools"]["core"] == ["playwright__*", "mcp_playwright_*"]
-    assert calls[0][1]["mcp"]["allowed"] == ["playwright"]
+    result = backend.apply({'apply_url': 'https://example.com'}, {}, True)
+    assert result.status == 'FAILED' and 'disabled' in result.detail
 
 
 def test_answer_bank(ctx):
@@ -307,9 +301,9 @@ def test_track_classify_and_ingest(ctx):
     jid = tailored_job(ctx, company="Acme Inc")
     ctx.db.set_job(jid, status="applied")
     n = track.ingest(ctx.db, [{"id": "m1", "from": "Acme Recruiting <jobs@acme.com>", "subject": "Interview with Acme",
-                               "snippet": "", "date": "x"}])
+                               "snippet": "", "date": "2026-01-01T00:00:00+00:00"}])
     assert n == 1 and ctx.db.one("SELECT status FROM jobs WHERE id=?", (jid,))["status"] == "interviewing"
-    assert track.ingest(ctx.db, [{"id": "m1", "from": "a", "subject": "Interview", "date": "x"}]) == 0   # idempotent
+    assert track.ingest(ctx.db, [{"id": "m1", "from": "a", "subject": "Interview", "date": "2026-01-01T00:00:00+00:00"}]) == 0   # idempotent
     assert "jobhunt digest" in track.digest(ctx.db)
 
 

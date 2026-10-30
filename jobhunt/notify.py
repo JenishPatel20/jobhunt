@@ -13,7 +13,21 @@ class Notifier:
         self.base_url = os.environ.get("NTFY_BASE_URL", "https://ntfy.sh").rstrip("/")
         self.token = os.environ.get("NTFY_TOKEN", "").strip()
 
+    def enqueue(self, text, request_id=None):
+        self.db.x('INSERT INTO outbox(request_id,text) VALUES(?,?)', (request_id, text))
+        from .telegram import Telegram
+        telegram = Telegram(self.db)
+        if telegram.configured:
+            telegram.flush()
+        else:
+            print('[notify:pending] Telegram is not configured; request saved in the local inbox')
+
     def send(self, text: str, subject: str = "jobhunt") -> str:
+        from .telegram import Telegram
+        telegram = Telegram(self.db)
+        if telegram.configured:
+            self.enqueue(subject + '\n' + text)
+            return 'telegram_queued'
         if self.topic:
             try:
                 headers = {"Title": subject[:100], "Content-Type": "text/plain; charset=utf-8"}

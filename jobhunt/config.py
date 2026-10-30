@@ -22,7 +22,10 @@ def load_env(root: Path | None = None) -> None:
 
 def load_yaml(name: str, root: Path | None = None) -> dict:
     p = (root or home()) / "config" / name
-    return yaml.safe_load(p.read_text()) or {}
+    value = yaml.safe_load(p.read_text()) or {}
+    if not isinstance(value, dict):
+        raise ValueError(f'{name} must contain a YAML mapping')
+    return value
 
 
 class Ctx:

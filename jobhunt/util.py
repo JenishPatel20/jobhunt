@@ -31,6 +31,11 @@ def today() -> str:
     return dt.date.today().isoformat()
 
 
+def day_start_utc() -> str:
+    """UTC instant for midnight in the operating machine's local timezone."""
+    return dt.datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0).astimezone(dt.timezone.utc).isoformat(timespec='seconds')
+
+
 def deep_get(d: dict, path: str):
     cur = d
     for part in path.split("."):

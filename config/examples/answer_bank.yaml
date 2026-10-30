@@ -1,5 +1,14 @@
 # Answers refer to local profile facts. Set every fact truthfully before use.
 answers:
+  - name: first_name
+    patterns: ['^first name$']
+    ref: candidate.first_name
+  - name: last_name
+    patterns: ['^last name$']
+    ref: candidate.last_name
+  - name: full_name
+    patterns: ['^full name$']
+    ref: candidate.name
   - name: sponsorship
     patterns: ['sponsor|employment visa']
     ref: work_authorization.needs_h1b_sponsorship

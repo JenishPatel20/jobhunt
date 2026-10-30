@@ -6,7 +6,8 @@ import time
 import requests
 
 from . import ats, scrapers, sponsors
-from ..util import norm_company
+from ..util import norm_company, now_iso
+from ..db import canonical_url
 
 
 def _fresh(job: dict, max_age_days: int) -> bool:
@@ -14,7 +15,10 @@ def _fresh(job: dict, max_age_days: int) -> bool:
     m = re.match(r"(\d{4})-(\d{2})-(\d{2})", p)
     if not m:
         return True  # unknown date -> keep
-    d = dt.date(*map(int, m.groups()))
+    try:
+        d = dt.date(*map(int, m.groups()))
+    except ValueError:
+        return True
     return (dt.date.today() - d).days <= max_age_days
 
 
@@ -58,7 +62,7 @@ def run(ctx) -> dict:
     s, db = ctx.settings["discover"], ctx.db
     sponsors.load_everify(db, ctx.root / "config" / "everify.txt")
     max_age = ctx.settings["filter"]["max_age_days"]
-    stats = {"fetched": 0, "new": 0, "boards": 0}
+    stats = {"fetched": 0, "new": 0, "boards": 0, "source_failures": 0}
     boards = [c for c in db.q("SELECT * FROM companies") if c["ats"] in s["boards"]]
     # manual list wins: config/companies.yaml entries are inserted as verified
     import yaml
@@ -73,19 +77,30 @@ def run(ctx) -> dict:
             jobs = ats.FETCHERS[c["ats"]](c["slug"], c["display_name"])
         except Exception as e:
             print(f"[discover] {c['ats']}/{c['slug']} failed: {e}")
+            db.x('INSERT INTO source_runs(source,at,state,detail,fetched) VALUES(?,?,?,?,?)',
+                 (f"{c['ats']}/{c['slug']}", now_iso(), 'failed', type(e).__name__, 0))
+            stats['source_failures'] += 1
             continue
         stats["boards"] += 1
         for j in jobs:
             stats["fetched"] += 1
-            if _fresh(j, max_age) and db.upsert_job(j):
+            if db.upsert_job(j):
                 stats["new"] += 1
+                if not _fresh(j, max_age):
+                    alias = db.one('SELECT job_id FROM job_sources WHERE url=?',
+                                   (canonical_url(j.get('apply_url') or j.get('url')),))
+                    if alias:
+                        db.set_job(alias['job_id'], status='rejected', reject_reason='posting_age')
+        db.x('INSERT INTO source_runs(source,at,state,detail,fetched) VALUES(?,?,?,?,?)',
+             (f"{c['ats']}/{c['slug']}", now_iso(), 'ok' if getattr(jobs, 'complete', True) else 'partial',
+              '' if getattr(jobs, 'complete', True) else 'Bounded/incomplete discovery; never infer closure from absence', len(jobs)))
         time.sleep(0.5)
     # optional scrapers
     qf = ctx.root / "config" / "queries.yaml"
     if qf.exists():
         q = yaml.safe_load(qf.read_text()) or {}
         for j in scrapers.jobspy(q.get("queries", []), q.get("location", "United States"),
-                                 s["scraper_sites"], s["results_per_query"], s["hours_old"]):
+                                 s["scraper_sites"], s["results_per_query"], s["hours_old"], db=db):
             stats["fetched"] += 1
             if db.upsert_job(j):
                 stats["new"] += 1

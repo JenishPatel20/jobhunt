@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 import requests
+import yaml
+from conftest import confirm_profile, prepare_job
 
 from jobhunt import filter as filt
 from jobhunt import cli
@@ -148,7 +150,7 @@ def test_thin_listing_needs_nine_and_valid_url(ctx):
 def test_daily_outage_skips_tailor_apply_and_alerts_once(ctx, monkeypatch):
     monkeypatch.setenv("JOBHUNT_HOME", str(ctx.root))
     monkeypatch.setattr(cli.discover, "run", lambda *_: {})
-    monkeypatch.setattr(cli.filt, "run", lambda *_: {"quota_stop": False, "model_error": False,
+    monkeypatch.setattr(cli.filt, "run", lambda *_, **kwargs: {"quota_stop": False, "model_error": False,
                                                    "service_unavailable": True})
     monkeypatch.setattr(cli.tailor, "run", lambda *_: pytest.fail("tailor called"))
     monkeypatch.setattr(cli.apply_mod, "run", lambda *_: pytest.fail("apply called"))
@@ -158,10 +160,11 @@ def test_daily_outage_skips_tailor_apply_and_alerts_once(ctx, monkeypatch):
     monkeypatch.setattr(cli.Notifier, "send", lambda _self, _text, subject="": sent.append(subject))
     cli.main(["daily"])
     cli.main(["daily"])
-    assert sent.count("jobhunt Gemini outage") == 1
+    assert sent.count("jobhunt model outage") == 1
 
 
 def test_interrupted_apply_needs_human_before_retry(ctx):
+    confirm_profile(ctx)
     profile = Profile(ctx)
     profile.p["work_authorization"]["authorized_to_work_us_now"] = "Yes"
     profile.p["work_authorization"]["earliest_start_date"] = "Jan 2027"
@@ -169,18 +172,20 @@ def test_interrupted_apply_needs_human_before_retry(ctx):
     profile.p["preferences"]["willing_to_relocate"] = "Yes"
     ctx.db.upsert_job(listing("https://example.com/apply", "Build Python services. " * 8))
     jid = ctx.db.one("SELECT id FROM jobs")["id"]
-    ctx.db.set_job(jid, status="tailored", fit_final=9, resume_path="/tmp/resume.pdf")
+    (ctx.root / "config" / "profile.yaml").write_text(yaml.safe_dump(ctx.profile))
+    ctx.db.kv_set("reviewed_profile_hash", profile.fingerprint())
+    prepare_job(ctx, jid)
     class CrashingBackend:
         calls = 0
         def apply(self, *_):
             self.calls += 1
-            raise RuntimeError("process stopped")
+            raise SystemExit("process stopped")
     class Notifier:
         def __init__(self): self.sent = []
         def send(self, text, subject=""):
             self.sent.append(text)
     backend, notifier = CrashingBackend(), Notifier()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(SystemExit):
         apply_mod.run(ctx, profile, notifier, backend=backend)
     assert ctx.db.one("SELECT status FROM jobs")["status"] == "applying"
     assert ctx.db.one("SELECT status FROM applications")["status"] == "IN_PROGRESS"
@@ -188,5 +193,5 @@ def test_interrupted_apply_needs_human_before_retry(ctx):
     assert backend.calls == 1
     req = ctx.db.one("SELECT * FROM human_requests")
     assert req["kind"] == "interrupted" and ctx.db.one("SELECT status FROM jobs")["status"] == "needs_human"
-    assert hitl.resolve(ctx.db, "retry", req["id"])
+    assert hitl.resolve(ctx.db, "retry", req["id"], "Verified no employer submission")
     assert ctx.db.one("SELECT status FROM jobs")["status"] == "tailored"

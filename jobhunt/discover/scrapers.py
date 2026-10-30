@@ -1,6 +1,7 @@
 """Optional open-source scraper + Apify no-login actor adapters. Both are OFF unless configured.
 LinkedIn is excluded by default (settings.discover.scraper_sites)."""
 import os
+from ..util import now_iso
 
 
 def _cell(value) -> str:
@@ -9,11 +10,16 @@ def _cell(value) -> str:
     return "" if text.lower() in ("nan", "none", "null", "nat", "<na>") else text
 
 
-def jobspy(queries: list[str], location: str, sites: list[str], n: int, hours_old: int) -> list[dict]:
+def jobspy(queries: list[str], location: str, sites: list[str], n: int, hours_old: int, db=None) -> list[dict]:
+    def health(state, detail, fetched=0):
+        if db:
+            db.x('INSERT INTO source_runs(source,at,state,detail,fetched) VALUES(?,?,?,?,?)',
+                 ('jobspy', now_iso(), state, str(detail)[:500], fetched))
     try:
         from jobspy import scrape_jobs  # pip install python-jobspy
     except ImportError:
         print("[discover] python-jobspy not installed; skipping scrapers")
+        health("unavailable", "Optional python-jobspy not installed")
         return []
     out = []
     for q in queries:
@@ -22,13 +28,19 @@ def jobspy(queries: list[str], location: str, sites: list[str], n: int, hours_ol
                              hours_old=hours_old, country_indeed="USA")
         except Exception as e:  # scrapers break often; never kill the run
             print(f"[discover] jobspy '{q}' failed: {e}")
+            health("failed", type(e).__name__)
             continue
+        errors, warnings = df.attrs.get('errors', {}), df.attrs.get('warnings', {})
+        health('partial' if errors or warnings else 'ok', {'errors': errors, 'warnings': warnings}, len(df))
         for _, r in df.iterrows():
             url = _cell(r.get("job_url"))
             out.append({"source": f"jobspy:{_cell(r.get('site'))}", "company": _cell(r.get("company")),
                         "title": _cell(r.get("title")), "location": _cell(r.get("location")),
                         "url": url, "apply_url": _cell(r.get("job_url_direct")) or url,
-                        "description": _cell(r.get("description")), "posted_at": _cell(r.get("date_posted"))})
+                        "description": _cell(r.get("description")), "posted_at": _cell(r.get("date_posted")),
+                        'employment_type': _cell(r.get('job_type')), 'source_job_id': _cell(r.get('id')),
+                        'compensation': {k: _cell(r.get(k)) for k in ('min_amount', 'max_amount', 'interval', 'currency')},
+                        'source_url': url})
     return out
 
 

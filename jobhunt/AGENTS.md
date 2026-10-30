@@ -18,16 +18,16 @@ See [architecture](../docs/architecture.md) for the full data flow.
 
 ## Facts and external integrations
 
-- Filtering applies hard rules before model scoring. Preserve bounded Gemini
-  retries, fallback, quota accounting, and cooldown handling. The daily pipeline
-  skips tailoring/applying when scoring is unavailable.
+- Filtering applies hard rules before model scoring. Preserve provider
+  call accounting, cooldown handling, and the subscription-only/no-paid-fallback
+  boundary. The daily pipeline skips tailoring/applying when scoring is unavailable.
 - Tailoring uses source-linked facts and numeric/technology checks. Preserve
   those checks and fallbacks; do not invent candidate claims or imply complete
   factual verification.
 - Keep optional browser, scraper, and Gmail dependencies optional. Mock HTTP,
   model, browser, email, notification, and subprocess boundaries in tests.
 - Gmail tracking reads metadata/snippets; learning writes local reports/drafts.
-  Do not add sending or publishing as an incidental implementation change.
+  Do not add Gmail sending or LinkedIn publishing as an incidental change.
 
 Validate changed behavior with the [offline tests](../tests/AGENTS.md). Record
 meaningful changes in [decisions](../docs/decisions.md) and unfinished work in

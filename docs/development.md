@@ -1,7 +1,7 @@
 # Development
 
 Create a virtual environment and install `python -m pip install -e '.[dev]'`, then run
-`python -m pytest -q`. The supported CI baseline is Python 3.11 on Linux.
+`python -m pytest -q -m 'not browser'`. The supported CI baseline is Python 3.11 on Linux.
 
 Tests build temporary homes from tracked filter/settings files and fictional files under
 `config/examples/`. They must not read the developer's profile or `.env`. The shared fixture blocks
@@ -14,6 +14,25 @@ that command over an existing configured project: it would replace local facts.
 
 Before committing, inspect `git status --short`, `git diff --cached`, and the exact staged file list.
 Never force-add ignored profile, answer-bank, credential, database, or generated-document files.
+
+## Browser acceptance tests
+
+Install `python -m pip install -e '.[dev,pdf]'` and `playwright install chromium`, then run
+`JOBHUNT_BROWSER_TESTS=1 python -m pytest -q -m browser`. The fixture server binds only to
+loopback, all candidate facts are fictional, and tests never visit a real ATS. Browser tests
+cover actual preparation/request blocking, approval invalidation, promotion/new form shapes,
+confirmation/reconciliation, login checkpoint recovery, required letters, and PDF validation.
+Use an explicitly configured `PLAYWRIGHT_BROWSERS_PATH` if Chromium is installed outside its
+default location. Browser execution/loopback binding may require the local sandbox's approval.
+
+The offline Requests guard does not cover arbitrary SDK/browser/SMTP traffic. Keep those
+boundaries mocked or restricted to the loopback fixture. Test v1 database migration with
+existing IDs/attempts and its automatic backup; do not exercise migration on personal data.
+
+Current artifact checks validate PDF extraction and horizontal layout, not complete semantic
+truth or every pagination defect. Visually inspect representative PDFs when changing rendering.
+Model and notification tests mock their boundaries; they do not prove account entitlement,
+current vendor compatibility, message delivery, or live submission success.
 
 ## Agent memory workflow
 
