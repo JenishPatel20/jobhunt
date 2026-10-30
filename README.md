@@ -120,5 +120,16 @@ LinkedIn output is drafted locally for manual review and posting.
 ## Development
 
 See [development notes](docs/development.md) for configuration, tests, and the snapshot workflow.
+
+For coding agents, start with the shared [project instructions](AGENTS.md),
+[current handoff](docs/handoff.md), and [decision log](docs/decisions.md).
+Scoped instructions cover core code, discovery, applications, configuration, and tests;
+Claude entry points import those same rules. Other agents can use this onboarding prompt:
+
+> Read root AGENTS.md, docs/handoff.md, and relevant folder instructions. Consult docs/decisions.md for relevant decisions, then inspect the current code and Git status before making changes.
+
+Maintain shared memory using the [development workflow](docs/development.md#agent-memory-workflow).
+Agent tools differ in automatic loading; these files do not guarantee automatic updates.
+
 This repository contains no license grant. An optional ApplyPilot integration must be evaluated
 against the license of the specific implementation being used.
