@@ -1,5 +1,43 @@
 # Current project handoff
 
+## Local pipeline activation — 2026-10-31
+
+- **Objective:** Initialize the user's local runtime and reach a reviewed real-profile dry run.
+- **Status:** Runtime/discovery ready; real-profile review and Telegram setup pending.
+- **Progress:** Initialized ignored local files and installed normal-location Chromium.
+  Installed Codex CLI 0.166.0 under `~/.local` after system npm installation hit OS
+  permissions; existing ChatGPT authentication worked. Imported the original project's
+  candidate profile, answer bank, and queries as an unreviewed local draft. Incorporated
+  user-confirmed preferences; current authorization/start-date answers remain unresolved.
+  Selected three verified public Greenhouse boards and installed optional JobSpy.
+  The original source files were preserved. All personal inputs/artifacts remain ignored.
+- **Discovery:** Saved **354 observations / 348 jobs**: 54 Greenhouse and 294 public-board
+  leads, with 315 awaiting filtering and 33 age-rejected. Two relevant employer postings
+  returned authoritative open checks. CSV/JSON exports are in ignored `reports/`.
+  Discovery and availability evidence do not establish candidate fit or ATS form support.
+- **Document correction:** A local source-facts preview exposed a project heading separated
+  from its bullets. Grouped experience/project entries for pagination and added a multi-page
+  PDF regression. The regenerated private preview has two pages, complete extracted text,
+  and visually checked layout. This is an untailored draft, not an application artifact.
+- **Validation:** `init`, `pause-live`, `preflight`, subscription `llm-doctor`, discovery,
+  export, and `pip check` succeeded. The provider made one small request without profile
+  data. The new PDF regression passed. A full run exposed a transient browser-preparation
+  timeout; its isolated rerun passed. Increased only the fixture timeout from 1.5 to 5
+  seconds for cold browser actions. Final combined validation passed **105 tests**
+  with `JOBHUNT_BROWSER_TESTS=1 .venv/bin/python -m pytest -q --tb=short` (91 offline,
+  14 loopback browser/PDF). Changed Python files parse with 3.11 syntax; tests ran
+  under local Python 3.13. `git diff --check` passed; private files remain ignored.
+- **Relevant files:** [Operations](operations.md), `jobhunt/tailor.py`,
+  `tests/test_browser_workflow.py`; ignored local configuration/database/exports/preview.
+- **Missing inputs:** User confirmation that imported facts are current, explicit first/last
+  name mapping, and Telegram credentials entered privately into `.env` (or a local-inbox
+  choice). Review questions are pending. Do not stamp `profile-confirm` on the user's behalf
+  before their factual review. Never copy candidate facts or credentials into shared memory.
+- **Next step:** After factual review/corrections, run `profile-confirm`, `preflight`,
+  `filter --limit 10`, `tailor --limit 1`, and `apply --dry-run --limit 1`; inspect the
+  generated documents/form and handle actual human requests. Test Telegram when configured.
+  **No real application dry run, live submission, promotion, or schedule was enabled.**
+
 ## Reliable workflow implementation — 2026-10-30
 
 - **Objective:** Implement the approved ledger, availability/eligibility checks,
@@ -24,8 +62,9 @@
   six Claude imports. CLI init/status/export passed in a fictional `/tmp` home with
   zero model calls. Rendered/extracted and visually inspected a one-page fictional
   PDF: complete text, no visible clipping. No real notifications/submissions were sent.
-- **Remaining limitations:** Codex CLI/sign-in and actual subscription limits are
-  unverified here; Telegram credentials/delivery, real ATS compatibility, Gmail OAuth,
+- **Remaining limitations at this checkpoint:** Codex CLI/sign-in were unverified
+  (subsequently checked in local activation above); Telegram credentials/delivery,
+  real ATS compatibility, Gmail OAuth,
   launchd behavior, real candidate facts, and reviewed live trials remain unverified.
   API-credit routes are deliberately unavailable because credits-only billing cannot
   be enforced. Workday remains bounded discovery without authoritative availability

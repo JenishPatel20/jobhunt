@@ -148,7 +148,7 @@ def build_plan(ctx, llm, profile, job: dict) -> tuple[dict, list[str]]:
 
 CSS = """@page{size:Letter;margin:0.5in}*{box-sizing:border-box}body{font:10.5pt/1.25 Arial,Helvetica,sans-serif;margin:0;color:#000;overflow-wrap:anywhere}h1{font-size:18pt;margin:0;text-align:center}
 .c{text-align:center;font-size:9.5pt;margin-bottom:6px}h2{font-size:11pt;border-bottom:1px solid #000;margin:10px 0 4px;text-transform:uppercase}
-.r{display:flex;justify-content:space-between;gap:12px}.r span{flex-shrink:0}h2,.r{break-after:avoid}ul{margin:2px 0 4px 18px;padding:0}li{margin:0;break-inside:avoid}"""
+.r{display:flex;justify-content:space-between;gap:12px}.r span{flex-shrink:0}h2,.r{break-after:avoid}.item{break-inside:avoid}ul{margin:2px 0 4px 18px;padding:0}li{margin:0;break-inside:avoid}"""
 
 
 def render_html(profile, plan: dict) -> str:
@@ -171,14 +171,14 @@ def render_html(profile, plan: dict) -> str:
     emap = {e["id"]: e for e in p["experience"]}
     for it in plan["experience"]:
         e = emap[it["id"]]
-        out.append(f"<div class='r'><b>{E(e['title'])} | {E(e['company'])}</b><span>{E(e['dates'])}</span></div>")
-        out.append("<ul>" + "".join(f"<li>{E(b['text'])}</li>" for b in it["bullets"]) + "</ul>")
+        out.append(f"<div class='item'><div class='r'><b>{E(e['title'])} | {E(e['company'])}</b><span>{E(e['dates'])}</span></div>")
+        out.append("<ul>" + "".join(f"<li>{E(b['text'])}</li>" for b in it["bullets"]) + "</ul></div>")
     out.append("<h2>Projects</h2>")
     pmap = {x["id"]: x for x in p["projects"]}
     for it in plan["projects"]:
         x = pmap[it["id"]]
-        out.append(f"<div><b>{E(x['name'])}</b> | {E(x['subtitle'])}</div>")
-        out.append("<ul>" + "".join(f"<li>{E(b['text'])}</li>" for b in it["bullets"]) + "</ul>")
+        out.append(f"<div class='item'><div><b>{E(x['name'])}</b> | {E(x['subtitle'])}</div>")
+        out.append("<ul>" + "".join(f"<li>{E(b['text'])}</li>" for b in it["bullets"]) + "</ul></div>")
     out.append("</body></html>")
     return "".join(out)
 

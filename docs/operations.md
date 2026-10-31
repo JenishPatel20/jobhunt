@@ -3,6 +3,18 @@
 Start with the [README setup](../README.md#setup) and use fictional profiles only for tests.
 No schedule, live submission, workflow promotion, or external message is enabled by installation.
 
+If `npm install -g @openai/codex` fails with system-directory permissions, install
+into your user directory without `sudo`:
+
+```bash
+npm install -g --prefix "$HOME/.local" @openai/codex
+export PATH="$HOME/.local/bin:$PATH"
+codex login status
+```
+
+Use `codex login` if needed, choose ChatGPT sign-in, then run `jobhunt llm-doctor`.
+The scheduler already includes `~/.local/bin` in its executable search path.
+
 ## Review the profile
 
 Complete local facts and answers, then run `jobhunt profile-confirm`. This records the current

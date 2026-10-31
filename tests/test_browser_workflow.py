@@ -74,7 +74,8 @@ def prepared(ctx, employer):
                       'url': url, 'apply_url': url, 'description': 'Python API role'})
     job = ctx.db.one('SELECT * FROM jobs')
     prepare_job(ctx, job['id'])
-    ctx.settings['apply']['browser_timeout_ms'] = 1500
+    # Cold Chromium navigation/screenshots can exceed 1.5 seconds on a busy Mac.
+    ctx.settings['apply']['browser_timeout_ms'] = 5000
     ctx.db.kv_set('dry_runs_ok', 20)
     ctx.db.kv_set('live_enabled', 1)
     return job, PlaywrightBackend(ctx.settings, ctx, Profile(ctx), fixture_url=employer.url)
@@ -265,3 +266,23 @@ def test_browser_existing_receipt_is_not_new_submission_proof(ctx, employer, pre
     result = run(ctx, backend)
     assert result['submitted'] == 0 and employer.submissions == 0
     assert ctx.db.one("SELECT kind FROM human_requests WHERE status='open'")['kind'] == 'interrupted'
+
+
+def test_pdf_project_heading_stays_with_its_first_bullet(ctx, employer, tmp_path):
+    from pypdf import PdfReader
+    from jobhunt.tailor import _fallback
+    ctx.profile['projects'] = [
+        {'id': f'project-{index}', 'name': f'Fictional Project {index}', 'subtitle': 'Python and SQL',
+         'bullets': [{'id': f'project-{index}-bullet',
+                      'text': f'First contribution for project {index}: ' + 'Built tested Python data services with documented APIs. ' * 4}]}
+        for index in range(12)]
+    profile = Profile(ctx)
+    document = tailor.render_html(profile, _fallback(profile))
+    path = tmp_path / 'pagination.pdf'
+    assert tailor.html_to_pdf(document, path)
+    pages = [' '.join((page.extract_text() or '').split()) for page in PdfReader(path).pages]
+    assert len(pages) >= 2
+    for index in range(12):
+        heading = f'Fictional Project {index}'
+        first_bullet = f'First contribution for project {index}:'
+        assert any(heading in page and first_bullet in page for page in pages)
