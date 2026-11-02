@@ -41,12 +41,17 @@
   `apply --dry-run --limit 1` paused on an unrecognized employer form (workflow request #5).
   Results: zero submissions, zero successful dry runs, one human pause, zero failures.
   `inbox`, `status`, and `export` completed; eleven model calls were recorded that day.
-- **Telegram:** User does not yet have a bot and requested BotFather/token/ID instructions.
+- **Telegram:** User requested BotFather/token/ID instructions and created a bot.
   [Operations](operations.md#telegram) now has verified official setup steps. After the
   user saves the token locally and sends a private `/start`, retrieve numeric IDs with
   `getUpdates`, verify the sender, save locally, then test `/status`. Do not print the token
   or full response. No credentials/account identifiers belong in shared memory.
-- **Next step:** Complete private Telegram setup when the user says ready; review the
+- **Telegram checkpoint — 2026-11-01:** User reported ready; the locally saved token
+  authenticated successfully with `getMe`. Immediate and 25-second `getUpdates` checks
+  returned no private `/start` sender, so no numeric IDs were inferred or saved. Requested
+  a fresh `/start` in the newly created bot's private chat; awaiting that message. No
+  test notification or pending job request has been sent yet.
+- **Next step:** Complete private Telegram setup after receiving the fresh `/start`; review the
   actual resume together and resolve workflow request #5 via manual handling or a separately
   validated adapter. Other layouts must not be relabeled as classic to pass the gate.
   Live mode remains paused; no workflow promotion or schedule has been enabled.
