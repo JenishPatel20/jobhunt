@@ -3,7 +3,8 @@
 ## Local pipeline activation — 2026-10-31
 
 - **Objective:** Initialize the user's local runtime and reach a reviewed real-profile dry run.
-- **Status:** Runtime/discovery ready; real-profile review and Telegram setup pending.
+- **Status:** Profile confirmed and first resume prepared; dry trial paused on an
+  unsupported employer form. Telegram setup is pending.
 - **Progress:** Initialized ignored local files and installed normal-location Chromium.
   Installed Codex CLI 0.166.0 under `~/.local` after system npm installation hit OS
   permissions; existing ChatGPT authentication worked. Imported the original project's
@@ -29,19 +30,26 @@
   under local Python 3.13. `git diff --check` passed; private files remain ignored.
 - **Relevant files:** [Operations](operations.md), `jobhunt/tailor.py`,
   `tests/test_browser_workflow.py`; ignored local configuration/database/exports/preview.
-- **Update — 2026-11-01:** User marked the imported profile accurate and requested a final
-  joint review. No employer preferences/exclusions were supplied. They do not yet have a
-  Telegram bot and requested BotFather/token/ID setup instructions. Provided official steps;
-  after they save the token locally and send a private `/start`, retrieve their numeric IDs
-  through `getUpdates`, verify the sender, save locally, and test `/status`. No credentials
-  or account identifiers belong in this handoff.
-- **Missing inputs:** Explicit first/last name mapping and private Telegram setup. Name
-  clarification is pending. Finish the requested final factual review before recording
-  `profile-confirm`. Never infer unresolved authorization or start-date answers.
-- **Next step:** After names and final factual review/corrections, run `profile-confirm`, `preflight`,
-  `filter --limit 10`, `tailor --limit 1`, and `apply --dry-run --limit 1`; inspect the
-  generated documents/form and handle actual human requests. Test Telegram when configured.
-  **No real application dry run, live submission, promotion, or schedule was enabled.**
+- **Update — 2026-11-01:** User marked the imported profile accurate and then supplied
+  explicit form names. Saved those locally, recorded `profile-confirm`, and kept unresolved
+  authorization/start-date answers held. Final document review with the user remains due
+  before any live use. No employer preferences/exclusions were supplied.
+- **First preparation:** `filter --limit 10` scored ten roles: seven queued, two gaps,
+  one model-triggered eligibility review. Hard rules also rejected 195 pending leads;
+  four total eligibility requests remain. `tailor --limit 1` generated one validated
+  two-page resume without warnings, visually inspected on both pages. The actual
+  `apply --dry-run --limit 1` paused on an unrecognized employer form (workflow request #5).
+  Results: zero submissions, zero successful dry runs, one human pause, zero failures.
+  `inbox`, `status`, and `export` completed; eleven model calls were recorded that day.
+- **Telegram:** User does not yet have a bot and requested BotFather/token/ID instructions.
+  [Operations](operations.md#telegram) now has verified official setup steps. After the
+  user saves the token locally and sends a private `/start`, retrieve numeric IDs with
+  `getUpdates`, verify the sender, save locally, then test `/status`. Do not print the token
+  or full response. No credentials/account identifiers belong in shared memory.
+- **Next step:** Complete private Telegram setup when the user says ready; review the
+  actual resume together and resolve workflow request #5 via manual handling or a separately
+  validated adapter. Other layouts must not be relabeled as classic to pass the gate.
+  Live mode remains paused; no workflow promotion or schedule has been enabled.
 
 ## Reliable workflow implementation — 2026-10-30
 

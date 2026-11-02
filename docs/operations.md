@@ -29,7 +29,20 @@ question answers expire at the end of that local day.
 
 ## Telegram
 
-Create a bot using Telegram's BotFather and put its token in local `.env`. Set:
+1. Open the official [@BotFather](https://t.me/BotFather) in Telegram and send `/newbot`.
+   Follow its prompts for a display name and an available bot username. BotFather returns
+   the bot token; see [Telegram's setup instructions](https://core.telegram.org/bots/tutorial#obtain-your-bot-token).
+2. Put the token in local `.env` as `TELEGRAM_BOT_TOKEN`. Never paste it into chat,
+   screenshots, shared logs, or a shell command containing the actual token.
+3. Open your newly created bot's private conversation and press Start or send `/start`.
+4. Retrieve the private message using the bot's
+   [`getUpdates`](https://core.telegram.org/bots/api#getupdates) API. Identify your own
+   message: `message.from.id` is `TELEGRAM_USER_ID`, and `message.chat.id` is
+   `TELEGRAM_CHAT_ID`. These are numeric IDs, not phone numbers or usernames; do not use
+   the bot's own user ID. A local coding agent can retrieve these after the token is saved,
+   then verify the sender before saving them. Stop any existing poller during this step.
+
+The completed local settings are:
 
 ```text
 TELEGRAM_BOT_TOKEN=<your bot token>
@@ -37,15 +50,17 @@ TELEGRAM_CHAT_ID=<your private chat numeric ID>
 TELEGRAM_USER_ID=<your Telegram numeric user ID>
 ```
 
-Start a private conversation with the bot. Both numeric IDs are required; commands from
-other users/chats are ignored. Do not publish these settings or tokens. To obtain the IDs,
-inspect your bot's `getUpdates` response locally after sending `/start`; avoid sharing the
-response or putting a token-containing URL into a public log.
+Both numeric IDs are required; commands from other users/chats are ignored. Do not publish
+these settings, the full `getUpdates` response, or a token-containing URL.
 
 ```bash
 jobhunt telegram-poll --once
 jobhunt telegram-poll
 ```
+
+Send `/status` privately to your bot while the poller is running. A reply verifies the
+basic connection. A newly created bot has no application running yet, so silence after
+the initial `/start` is expected until the poller starts.
 
 The poller may run alongside `daily`; human commands use transactional updates rather than
 holding the long pipeline lock. Delivery failures remain in SQLite and retry with backoff.
