@@ -29,11 +29,16 @@
   under local Python 3.13. `git diff --check` passed; private files remain ignored.
 - **Relevant files:** [Operations](operations.md), `jobhunt/tailor.py`,
   `tests/test_browser_workflow.py`; ignored local configuration/database/exports/preview.
-- **Missing inputs:** User confirmation that imported facts are current, explicit first/last
-  name mapping, and Telegram credentials entered privately into `.env` (or a local-inbox
-  choice). Review questions are pending. Do not stamp `profile-confirm` on the user's behalf
-  before their factual review. Never copy candidate facts or credentials into shared memory.
-- **Next step:** After factual review/corrections, run `profile-confirm`, `preflight`,
+- **Update — 2026-11-01:** User marked the imported profile accurate and requested a final
+  joint review. No employer preferences/exclusions were supplied. They do not yet have a
+  Telegram bot and requested BotFather/token/ID setup instructions. Provided official steps;
+  after they save the token locally and send a private `/start`, retrieve their numeric IDs
+  through `getUpdates`, verify the sender, save locally, and test `/status`. No credentials
+  or account identifiers belong in this handoff.
+- **Missing inputs:** Explicit first/last name mapping and private Telegram setup. Name
+  clarification is pending. Finish the requested final factual review before recording
+  `profile-confirm`. Never infer unresolved authorization or start-date answers.
+- **Next step:** After names and final factual review/corrections, run `profile-confirm`, `preflight`,
   `filter --limit 10`, `tailor --limit 1`, and `apply --dry-run --limit 1`; inspect the
   generated documents/form and handle actual human requests. Test Telegram when configured.
   **No real application dry run, live submission, promotion, or schedule was enabled.**
