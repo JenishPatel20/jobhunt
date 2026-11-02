@@ -4,7 +4,7 @@
 
 - **Objective:** Initialize the user's local runtime and reach a reviewed real-profile dry run.
 - **Status:** Profile confirmed and first resume prepared; dry trial paused on an
-  unsupported employer form. Telegram setup is pending.
+  unsupported employer form. Telegram configuration and a real `/status` round trip are verified.
 - **Progress:** Initialized ignored local files and installed normal-location Chromium.
   Installed Codex CLI 0.166.0 under `~/.local` after system npm installation hit OS
   permissions; existing ChatGPT authentication worked. Imported the original project's
@@ -46,12 +46,19 @@
   user saves the token locally and sends a private `/start`, retrieve numeric IDs with
   `getUpdates`, verify the sender, save locally, then test `/status`. Do not print the token
   or full response. No credentials/account identifiers belong in shared memory.
-- **Telegram checkpoint — 2026-11-01:** User reported ready; the locally saved token
-  authenticated successfully with `getMe`. Immediate and 25-second `getUpdates` checks
-  returned no private `/start` sender, so no numeric IDs were inferred or saved. Requested
-  a fresh `/start` in the newly created bot's private chat; awaiting that message. No
-  test notification or pending job request has been sent yet.
-- **Next step:** Complete private Telegram setup after receiving the fresh `/start`; review the
+- **Telegram checkpoint — 2026-11-01:** Retrieved the fresh private `/start`; one non-bot
+  sender was consistent with the confirmed profile. Saved numeric user/chat IDs in ignored
+  `.env` with owner-only permissions, preserving other settings. Consumed the setup message
+  as a handshake before ordinary command processing. Telegram accepted six messages: the
+  connection test and all five pending human requests; the durable outbox has zero pending
+  deliveries. `preflight` reports Telegram configured and profile reviewed. Received and
+  processed the user's real `/status` command; its digest and acknowledgement were accepted
+  by Telegram, with no pending outbox messages. No credential, numeric
+  identifier, or full Telegram message response was displayed or added to shared memory.
+- **Polling:** Verification used one bounded poll, which has exited. For ongoing replies,
+  run `source .venv/bin/activate` and `jobhunt telegram-poll` in a separate project terminal.
+  No unattended Telegram or daily schedule has been installed.
+- **Next step:** Keep the manual poller running during trials; review the
   actual resume together and resolve workflow request #5 via manual handling or a separately
   validated adapter. Other layouts must not be relabeled as classic to pass the gate.
   Live mode remains paused; no workflow promotion or schedule has been enabled.
