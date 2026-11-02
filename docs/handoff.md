@@ -1,5 +1,24 @@
 # Current project handoff
 
+## Updated personal resume review — 2026-11-01
+
+- **Status:** Source review complete; profile synchronization remains pending.
+- **Progress:** Read the newly supplied PDF, extracted its text/link targets, and visually
+  inspected its single rendered page. It changes education details, skills, experience
+  wording, and project claims relative to the currently reviewed profile. Omitted experience
+  must not be treated as disproven or deleted automatically. No embedded document text was
+  treated as an agent instruction.
+- **Private evidence:** Source path/hash and review notes are in ignored
+  `out/onboarding/updated-resume-review/review.json`, alongside extraction/page preview.
+  Keep all actual facts, metrics, contact data, and repository links out of shared memory.
+- **Validation:** PDF text extraction and link-target extraction succeeded; no obvious
+  clipping was visible. The page is dense. Claims and link destinations were not independently
+  verified. Master profile, existing artifacts, and application states were left unchanged.
+- **Next step:** Synchronize the new source into local profile facts with stable IDs and
+  preserved history before generating the next resume; resolve any conflicting claims,
+  invalidate old approvals/artifacts through normal profile review, and regenerate documents.
+  Continue resolving the unsupported form in workflow request #5; live mode stays paused.
+
 ## Local pipeline activation — 2026-10-31
 
 - **Objective:** Initialize the user's local runtime and reach a reviewed real-profile dry run.
