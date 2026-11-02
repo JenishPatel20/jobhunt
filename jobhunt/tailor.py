@@ -8,6 +8,7 @@ import re
 import uuid
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from .llm import LLMError, QuotaExceeded
 from .db import dumps, fingerprint
@@ -153,11 +154,23 @@ CSS = """@page{size:Letter;margin:0.5in}*{box-sizing:border-box}body{font:10.5pt
 
 def render_html(profile, plan: dict) -> str:
     p, E = profile.p, html.escape
+    def link(value, label=None):
+        if not isinstance(value, str) or not value.strip():
+            return ''
+        value = value.strip()
+        try:
+            url = value if urlsplit(value).scheme else 'https://' + value
+            parsed = urlsplit(url)
+            if parsed.scheme not in {'https', 'http'} or not parsed.hostname:
+                return E(label or value)
+        except ValueError:
+            return E(label or value)
+        return f'<a href="{E(url)}">{E(label or value)}</a>'
     c = p["candidate"]
     L = c["links"]
     out = [f"<html><head><meta charset='utf-8'><style>{CSS}</style></head><body>",
            f"<h1>{E(c['name'])}</h1><div class='c'>{E(c['location'])} | {E(c['phone'])} | {E(c['email'])}<br>"
-           f"{E(L['linkedin'])} | {E(L['github'])} | {E(L['portfolio'])}</div>"]
+           f"{link(L['linkedin'])} | {link(L['github'])} | {link(L['portfolio'])}</div>"]
     if plan.get("summary"):
         out.append(f"<h2>Summary</h2><div>{E(plan['summary'])}</div>")
     out.append("<h2>Education</h2>")
@@ -177,7 +190,9 @@ def render_html(profile, plan: dict) -> str:
     pmap = {x["id"]: x for x in p["projects"]}
     for it in plan["projects"]:
         x = pmap[it["id"]]
-        out.append(f"<div class='item'><div><b>{E(x['name'])}</b> | {E(x['subtitle'])}</div>")
+        repository = link(x.get('repo_url'), 'GitHub')
+        out.append(f"<div class='item'><div><b>{E(x['name'])}</b> | {E(x['subtitle'])}"
+                   + (f' | {repository}' if repository else '') + '</div>')
         out.append("<ul>" + "".join(f"<li>{E(b['text'])}</li>" for b in it["bullets"]) + "</ul></div>")
     out.append("</body></html>")
     return "".join(out)

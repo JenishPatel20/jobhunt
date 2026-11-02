@@ -286,3 +286,18 @@ def test_pdf_project_heading_stays_with_its_first_bullet(ctx, employer, tmp_path
         heading = f'Fictional Project {index}'
         first_bullet = f'First contribution for project {index}:'
         assert any(heading in page and first_bullet in page for page in pages)
+
+
+def test_pdf_preserves_candidate_and_project_link_targets(ctx, employer, tmp_path):
+    from pypdf import PdfReader
+    ctx.profile['candidate']['links']['github'] = 'github.com/example-candidate'
+    project_url = 'https://github.com/example-candidate/example-project?tab=readme&view=source'
+    ctx.profile['projects'][0]['repo_url'] = project_url
+    profile = Profile(ctx)
+    document = tailor.render_html(profile, tailor._fallback(profile))
+    path = tmp_path / 'linked-resume.pdf'
+    assert tailor.html_to_pdf(document, path)
+    targets = {str(annotation.get_object().get('/A', {}).get('/URI'))
+               for page in PdfReader(path).pages for annotation in page.get('/Annots', [])}
+    assert 'https://github.com/example-candidate' in targets
+    assert project_url in targets

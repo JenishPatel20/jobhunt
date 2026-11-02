@@ -134,6 +134,12 @@ issue, then run `jobhunt documents-retry JOB_ID` followed by `jobhunt tailor`. T
 never uploads an HTML fallback as a resume. Numeric/technology/source checks are incomplete
 semantic safeguards; review the actual generated content before trusting a workflow.
 
+Generated resumes include the profile's candidate web links and each selected project's
+`repo_url` as clickable links. Keep those targets in the local profile; tailoring selects
+source facts and does not invent repository URLs. Retain a private backup when replacing
+the master resume, then run `profile-confirm` and reevaluate matches before preparing new
+documents. Previous PDFs remain historical artifacts and require regeneration for new facts.
+
 ## Live promotion and stopping
 
 Run dry trials first. After the configured dry-run gate, `jobhunt go-live` permits individually

@@ -1,23 +1,34 @@
 # Current project handoff
 
-## Updated personal resume review — 2026-11-01
+## Updated personal resume synchronization — 2026-11-02
 
-- **Status:** Source review complete; profile synchronization remains pending.
-- **Progress:** Read the newly supplied PDF, extracted its text/link targets, and visually
-  inspected its single rendered page. It changes education details, skills, experience
-  wording, and project claims relative to the currently reviewed profile. Omitted experience
-  must not be treated as disproven or deleted automatically. No embedded document text was
-  treated as an agent instruction.
+- **Status:** Completed. User explicitly designated the updated resume as accurate and
+  authoritative. Local profile facts and links were synchronized and marked reviewed.
+- **Progress:** Updated active education, skills, experience, project bullets/order, and
+  repository links, preserving item/source IDs where applicable. The previous profile,
+  answer bank, and database were backed up privately; the source PDF was archived by hash.
+  The omitted role is excluded from active tailoring but preserved in backup history.
+  Authorization, approved form names, and preferences were preserved. Old document/request
+  bindings were invalidated; 178 jobs were returned for rule/fit reevaluation without model
+  calls. Historical artifacts/attempts/assessments remain available. Age rejections remain.
+- **Renderer:** Candidate web links and project repository links now survive HTML/PDF
+  rendering as clickable links. A fictional browser regression checks actual PDF annotations,
+  including a query string containing an ampersand. Unsupported URL schemes do not become links.
 - **Private evidence:** Source path/hash and review notes are in ignored
-  `out/onboarding/updated-resume-review/review.json`, alongside extraction/page preview.
+  `out/onboarding/updated-resume-review/review.json` and `sync-report.json`; backup/source
+  paths are recorded there. A fresh full-facts preview is in `out/onboarding/current-profile/`.
   Keep all actual facts, metrics, contact data, and repository links out of shared memory.
-- **Validation:** PDF text extraction and link-target extraction succeeded; no obvious
-  clipping was visible. The page is dense. Claims and link destinations were not independently
-  verified. Master profile, existing artifacts, and application states were left unchanged.
-- **Next step:** Synchronize the new source into local profile facts with stable IDs and
-  preserved history before generating the next resume; resolve any conflicting claims,
-  invalidate old approvals/artifacts through normal profile review, and regenerate documents.
-  Continue resolving the unsupported form in workflow request #5; live mode stays paused.
+- **Validation:** `profile-confirm`, `preflight`, and `export` succeeded. All 18 active
+  bullets match source PDF text after whitespace/typography normalization; all five repository
+  URLs are populated. Generated PDF has complete text and eight web-link targets (allowing
+  Chromium's trailing-slash normalization). Both preview pages were visually inspected.
+  `JOBHUNT_BROWSER_TESTS=1 .venv/bin/python -m pytest -q --tb=short` passed **106 tests**.
+  Personal inputs/source/backup/preview remain ignored. User-provided claims were accepted
+  as instructed, not independently audited; repository destinations were not fetched.
+- **Next step:** Reevaluate jobs against the new profile before tailoring application
+  documents. The previous workflow request #5 is now stale because its documents/profile
+  changed; its unsupported Greenhouse layout still requires an adapter or manual handling.
+  No application or live submission was attempted during synchronization; live mode stays paused.
 
 ## Local pipeline activation — 2026-10-31
 
@@ -78,7 +89,8 @@
   run `source .venv/bin/activate` and `jobhunt telegram-poll` in a separate project terminal.
   No unattended Telegram or daily schedule has been installed.
 - **Next step:** Keep the manual poller running during trials; review the
-  actual resume together and resolve workflow request #5 via manual handling or a separately
+  current resume and address the unsupported form first recorded in request #5 (now stale
+  after the source synchronization above) via manual handling or a separately
   validated adapter. Other layouts must not be relabeled as classic to pass the gate.
   Live mode remains paused; no workflow promotion or schedule has been enabled.
 
